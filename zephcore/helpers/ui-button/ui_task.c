@@ -189,7 +189,9 @@ static void dash_refresh_handler(struct k_work *work)
 	    ui_pages_current() == UI_PAGE_DASHBOARD) {
 		k_work_reschedule(&render_work, K_NO_WAIT);
 	}
-	k_work_reschedule(&dash_refresh_work, K_MINUTES(DASH_REFRESH_MIN));
+	if (ui_pages_has_dashboard()) {
+		k_work_reschedule(&dash_refresh_work, K_MINUTES(DASH_REFRESH_MIN));
+	}
 #endif
 }
 
@@ -204,7 +206,9 @@ static void splash_work_handler(struct k_work *work)
 	/* Transition from splash to home page (first active page for this role) */
 	ui_pages_set(ui_pages_home());
 	k_work_reschedule(&render_work, K_NO_WAIT);
-	k_work_reschedule(&dash_refresh_work, K_MINUTES(DASH_REFRESH_MIN));
+	if (ui_pages_has_dashboard()) {
+		k_work_reschedule(&dash_refresh_work, K_MINUTES(DASH_REFRESH_MIN));
+	}
 #endif
 }
 
@@ -993,6 +997,11 @@ void ui_set_radio_runtime(uint8_t sync_word,
 void ui_set_dashboard(const struct ui_dash *d)
 {
 	get_state()->dash = *d;
+}
+
+bool ui_has_dashboard(void)
+{
+	return ui_pages_has_dashboard();
 }
 
 void ui_set_radio_stats(uint32_t packets_rx, uint32_t packets_tx,

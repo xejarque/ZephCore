@@ -181,6 +181,9 @@ enum ui_page ui_pages_current(void);
 /** The page the node opens on: the first of its role. */
 enum ui_page ui_pages_home(void);
 
+/** True when this build has the dashboard page. */
+bool ui_pages_has_dashboard(void);
+
 /**
  * Set the node name displayed in the top bar.
  */

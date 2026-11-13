@@ -59,6 +59,11 @@ WEAK void ui_set_dashboard(const struct ui_dash *d)
 	ARG_UNUSED(d);
 }
 
+WEAK bool ui_has_dashboard(void)
+{
+	return false;
+}
+
 WEAK void ui_set_radio_stats(uint32_t packets_rx, uint32_t packets_tx,
 			     uint32_t packets_err)
 {

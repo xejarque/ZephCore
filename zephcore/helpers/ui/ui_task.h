@@ -102,6 +102,9 @@ void ui_set_radio_runtime(uint8_t sync_word,
  */
 void ui_set_dashboard(const struct ui_dash *d);
 
+/** True when this build has the dashboard page, so what it shows is worth gathering. */
+bool ui_has_dashboard(void);
+
 /**
  * Update radio packet counters for display.
  */

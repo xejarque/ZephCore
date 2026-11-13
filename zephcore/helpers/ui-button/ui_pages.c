@@ -166,8 +166,10 @@ static const enum ui_page active_pages[] = {
 	UI_PAGE_SHUTDOWN,
 };
 #else
-/* The dashboard needs a panel of at least 192x192. */
-#define UI_DASH_PANEL (!MC_DISPLAY_COLOR_PANEL && \
+/* The dashboard shows MeshCore and Meshtastic side by side: it needs Meshtastic in the
+ * build and a panel of at least 192x192. */
+#define UI_DASH_PANEL (IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC) && \
+		       !MC_DISPLAY_COLOR_PANEL && \
 		       DT_PROP_OR(MC_DISPLAY_NODE, width, 0) >= 192 && \
 		       DT_PROP_OR(MC_DISPLAY_NODE, height, 0) >= 192)
 static const enum ui_page active_pages[] = {
@@ -2101,6 +2103,15 @@ enum ui_page ui_pages_current(void)
 enum ui_page ui_pages_home(void)
 {
 	return active_pages[0];
+}
+
+bool ui_pages_has_dashboard(void)
+{
+#if !defined(ZEPHCORE_REPEATER) && UI_DASH_PANEL
+	return true;
+#else
+	return false;
+#endif
 }
 
 void ui_pages_set_node_name(const char *name)

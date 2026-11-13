@@ -434,7 +434,7 @@ extern "C" void mesh_housekeeping_ui_refresh(void)
 	ui_set_msg_count(s_mesh->getOfflineQueueCount());
 
 	/* The dashboard page: MeshCore and Meshtastic side by side. */
-	{
+	if (ui_has_dashboard()) {
 		struct ui_dash d = {};
 		const HeapTotals heap = heapTotals();
 
