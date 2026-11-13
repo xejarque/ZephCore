@@ -197,7 +197,7 @@ public:
   // ZEPHCORE: repeating a foreign (Meshtastic) frame. A copy of it heard from another node
   // pushes ours back by the reactive backoff, counted from its own slot, never forward.
   void foreignDupeHeard(const uint8_t* raw, int len);
-  // A repeat of a foreign frame goes after every MeshCore packet. Foreign frames, ours included,
+  // ZEPHCORE: a repeat of a foreign frame goes after every MeshCore packet. Foreign frames, ours included,
   // wait at most this many at once; a repeat past that is shed.
   // 0xFF would never be picked: the queue looks for a priority below 0xFF.
   static constexpr uint8_t FOREIGN_RELAY_PRIORITY = 0xFE;

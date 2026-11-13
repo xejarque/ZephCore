@@ -441,15 +441,14 @@ void Dispatcher::checkSend() {
     int len = 0;
     uint8_t raw[MAX_TRANS_UNIT];
 
-    if (!outbound->isForeign()) {  // ZEPHCORE: a foreign frame is its payload alone
-      raw[len++] = outbound->header;
-      if (outbound->hasTransportCodes()) {
-        memcpy(&raw[len], &outbound->transport_codes[0], 2); len += 2;
-        memcpy(&raw[len], &outbound->transport_codes[1], 2); len += 2;
-      }
-      raw[len++] = outbound->path_len;
-      len += Packet::writePath(&raw[len], outbound->path, outbound->path_len);
+    raw[len++] = outbound->header;
+    if (outbound->hasTransportCodes()) {
+      memcpy(&raw[len], &outbound->transport_codes[0], 2); len += 2;
+      memcpy(&raw[len], &outbound->transport_codes[1], 2); len += 2;
     }
+    raw[len++] = outbound->path_len;
+    len += Packet::writePath(&raw[len], outbound->path, outbound->path_len);
+    if (outbound->isForeign()) len = 0;  // ZEPHCORE: a foreign frame is its payload alone
 
     if (len + outbound->payload_len > MAX_TRANS_UNIT) {
       MESH_DEBUG_PRINTLN("%s Dispatcher::checkSend(): FATAL: Invalid packet queued... too long, len=%d", getLogDateTime(), len + outbound->payload_len);

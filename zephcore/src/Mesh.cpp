@@ -26,7 +26,7 @@ uint32_t Mesh::msUntilNextMaintenance() {
                            _contention.msUntilNextTick((uint32_t)_ms->getMillis()));
 }
 
-// A duplicate of a flood we are about to retransmit was heard: defer our copy
+// ZEPHCORE: a duplicate of a flood we are about to retransmit was heard: defer our copy
 // by one backoff_multiplier x airtime window per dupe, from its own slot, within
 // the per-packet reactive headroom.
 void Mesh::extendPendingRetransmit(uint32_t hash32) {
