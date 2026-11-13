@@ -1492,8 +1492,10 @@ TEST(mt_roles_by_firmware, "UNIT-MT-053", "A repeater may be client, client_base
 }
 
 static Header fwHeader(uint32_t from, uint8_t relay) {
+    static uint32_t next_id = 1;   // each call is a frame of its own
     Header h = {};
     h.from = from;
+    h.id = next_id++;
     h.relay = relay;
     return h;
 }
@@ -1544,10 +1546,13 @@ TEST(mt_fw_bridge, "UNIT-FW-013", "A frame the screen drops is not delivered, re
     CHECK(r.handleFrame(one, n1, 0, cap, out, &out_len) == RX_DROPPED);
     p.drop = 0;
     p.hop_rate = 1;
-    CHECK(r.handleFrame(one, n1, 0, cap, out, &out_len) == RX_HANDLED && out_len == n1 && cap.texts.size() == 1);
+    CHECK(r.handleFrame(one, n1, 0, cap, out, &out_len) == RX_DROPPED);   // the verdict of a copy is kept
+    uint8_t three[kMaxFrame];
+    size_t n3 = a.buildText(3, kBroadcast, "tres", 4, three, sizeof(three));
+    CHECK(r.handleFrame(three, n3, 0, cap, out, &out_len) == RX_HANDLED && out_len == n3 && cap.texts.size() == 1);
     CHECK(r.handleFrame(two, n2, 0, cap, out, &out_len) == RX_DROPPED && out_len == 0 && cap.texts.size() == 1);
-    CHECK(r.handleFrame(one, n1, 0, cap, out, &out_len) == RX_DUPLICATE);
-    CHECK(f.counters().rule[FW_TEXT] == 2 && f.counters().rate == 1);
+    CHECK(r.handleFrame(three, n3, 0, cap, out, &out_len) == RX_DUPLICATE);
+    CHECK(f.counters().rule[FW_TEXT] == 1 && f.counters().rate == 1);   // copies of a dropped frame are not counted again
 }
 
 TEST(mt_fw_commands, "UNIT-FW-014", "z.mt.fw.* use the Meshtastic rule names and refuse the MeshCore ones") {

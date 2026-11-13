@@ -51,6 +51,21 @@ public:
 
 	bool drops(const Header &h, uint32_t portnum) override
 	{
+		/* A dropped frame is not remembered by the bridge: its copies get the same verdict. */
+		const uint32_t key = h.from ^ (h.id * 2654435761u);
+		bool dropped;
+
+		if (_f.screened(key, dropped)) {
+			return dropped;
+		}
+		dropped = verdict(h, portnum);
+		_f.noteScreened(key, dropped);
+		return dropped;
+	}
+
+private:
+	bool verdict(const Header &h, uint32_t portnum)
+	{
 		if (_f.ruleDropped(_p, fwRuleOf(portnum))) {
 			return true;
 		}
@@ -68,7 +83,6 @@ public:
 		return false;
 	}
 
-private:
 	fw::Firewall &_f;
 	const fw::Prefs &_p;
 	uint32_t _now = 0;

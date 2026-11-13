@@ -983,6 +983,11 @@
       "source": "tests/unit/meshtastic_tests.cpp"
     },
     {
+      "id": "UNIT-FW-015",
+      "name": "A copy of a frame already screened gets its verdict again and is not counted; the ring keeps 32 frames",
+      "source": "tests/unit/fw_tests.cpp"
+    },
+    {
       "id": "UNIT-RX-001",
       "name": "Frames are counted by hops crossed, 7 or more together, unknown apart; empty buckets are left out",
       "source": "tests/unit/rxstats_tests.cpp"

@@ -156,3 +156,19 @@ TEST(fw_drop_command, "UNIT-FW-011", "z.mc.fw.drop turns each rule on or off, li
     CHECK(cmd(p, f, "set z.mc.fw.drop advert").rfind("Error", 0) == 0);
     CHECK(cmd(p, f, "set z.mc.fw.drop none", &changed) == "OK" && p.drop == 0 && changed);
 }
+
+TEST(fw_screened, "UNIT-FW-015", "A copy of a frame already screened gets its verdict again and is not counted; the ring keeps 32 frames") {
+    fw::Firewall f;
+    bool dropped = true;
+    CHECK(!f.screened(7, dropped));
+    f.noteScreened(7, true);
+    f.noteScreened(8, false);
+    CHECK(f.screened(7, dropped) && dropped);
+    CHECK(f.screened(8, dropped) && !dropped);
+    CHECK(!f.screened(9, dropped));
+    f.noteScreened(0, true);
+    CHECK(!f.screened(0, dropped));
+    for (uint32_t h = 100; h < 132; h++) f.noteScreened(h, false);
+    CHECK(!f.screened(7, dropped) && f.screened(131, dropped));
+    CHECK(f.counters().gap == 0 && f.counters().rate == 0);
+}

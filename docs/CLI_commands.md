@@ -274,7 +274,7 @@ Each line is `name (SNR in dB, time since the last frame)`. MeshCore: repeaters 
 
 ## Receive limits (*ZephCore only*, repeater)
 
-Drop rules and two limits on what the repeater accepts, MeshCore as `z.mc.fw.*` and, where built, Meshtastic as `z.mt.fw.*`, all off by default. A frame over a limit is neither processed nor repeated. They persist in `prefs.json` (`zc{}`, keys `fw_*`); the counters are in RAM and a reboot empties them. `z.mt.fw.*` is below. The room server and the companion answer `Error: not available in this role`.
+Drop rules and two limits on what the repeater accepts, MeshCore as `z.mc.fw.*` and, where built, Meshtastic as `z.mt.fw.*`, all off by default. A frame over a limit is neither processed nor repeated. The verdict of the last 32 frames is remembered, so a copy of a frame (another route, an echo) gets the same verdict and is not counted again. They persist in `prefs.json` (`zc{}`, keys `fw_*`); the counters are in RAM and a reboot empties them. `z.mt.fw.*` is below. The room server and the companion answer `Error: not available in this role`.
 
 | Command | Description |
 |---------|-------------|
@@ -286,7 +286,7 @@ Drop rules and two limits on what the repeater accepts, MeshCore as `z.mc.fw.*` 
 
 ### Meshtastic (`z.mt.fw.*`, `CONFIG_ZEPHTACORE_MESHTASTIC`)
 
-The same four commands, `get|set z.mt.fw.drop`, `.gap`, `.rate` and `get z.mt.fw.stats`, with their own settings and counters (`prefs.json` `zc{}`, keys `mfw_*`). They apply to a frame that is **new**: a copy of one already heard is a duplicate and is not screened, so a repeat of ours is still cancelled when a neighbour echoes it, and a frame dropped is not remembered. Differences:
+The same four commands, `get|set z.mt.fw.drop`, `.gap`, `.rate` and `get z.mt.fw.stats`, with their own settings and counters (`prefs.json` `zc{}`, keys `mfw_*`). They apply to a frame that is **new**: a copy of one already heard is a duplicate and is not screened, so a repeat of ours is still cancelled when a neighbour echoes it; a copy of a frame already dropped is dropped again without being counted. Differences:
 
 - `drop` rules are ports: `text`, `position`, `nodeinfo`, `telemetry`, `traceroute`, `other` (any port not named, admin and store-and-forward among them). Routing (ACK and NAK) is never dropped. A frame of a channel this node holds no key for has no readable port, so no rule reaches it.
 - `gap` is minutes between two NodeInfo of one node that are kept, by node number. A NodeInfo on a channel carries no signature, so anyone with the channel key can send one; the gap opens only for a frame that passed every other check.

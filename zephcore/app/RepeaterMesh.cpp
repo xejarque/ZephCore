@@ -638,6 +638,18 @@ bool RepeaterMesh::allowPacketForward(const mesh::Packet *packet) {
 // ZEPHCORE: ours. The receive limits of "z.mc.fw.*": an advert inside its key's gap, or a frame over
 // the ceiling of the repeater it came through, or a type a drop rule silences, is neither processed nor repeated.
 bool RepeaterMesh::filterRecvFloodPacket(mesh::Packet* packet) {
+  const uint32_t hash = mesh::ContentionTracker::computePacketHash32(packet);
+  bool dropped;
+
+  if (_firewall.screened(hash, dropped)) {
+    return dropped;
+  }
+  dropped = screenFlood(packet);
+  _firewall.noteScreened(hash, dropped);
+  return dropped;
+}
+
+bool RepeaterMesh::screenFlood(const mesh::Packet* packet) {
   const uint32_t now = (uint32_t)_ms->getMillis();
 
   if (_firewall.ruleDropped(_prefs.fw, fw::ruleOf(packet->getPayloadType()))) {

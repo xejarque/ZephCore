@@ -22,6 +22,7 @@ static constexpr size_t kAdvertSlots = 16;  /* nodes remembered */
 static constexpr size_t kHopSlots = 8;      /* neighbouring repeaters counted */
 static constexpr uint32_t kRateWindowMs = 60000;
 static constexpr size_t kHopMax = 3;        /* bytes of a relay name: a MeshCore path hash is up to 3 */
+static constexpr size_t kVerdicts = 32;     /* frames whose verdict is remembered */
 static constexpr size_t kRuleMax = 8;       /* one bit of Prefs::drop each */
 static constexpr uint8_t kNoRule = 0xFF;    /* a frame no rule covers */
 
@@ -95,6 +96,9 @@ class Firewall {
 		uint8_t count;
 		uint32_t window_ms;
 	};
+	uint32_t _verdict_hash[kVerdicts] = {};
+	uint32_t _verdict_dropped = 0;  /* bit per entry */
+	uint8_t _verdict_next = 0;
 	AdvertSeen _adverts[kAdvertSlots] = {};
 	HopRate _hops[kHopSlots] = {};
 	uint8_t _advert_next = 0;
@@ -103,6 +107,29 @@ class Firewall {
 
 public:
 	const Counters &counters() const { return _counters; }
+
+	/* A copy of a frame already screened gets the same verdict and is not counted again,
+	 * so echoes do not inflate the counters or spend the rate. hash 0 is never remembered. */
+	bool screened(uint32_t hash, bool &dropped) const
+	{
+		for (size_t i = 0; hash != 0 && i < kVerdicts; i++) {
+			if (_verdict_hash[i] == hash) {
+				dropped = (_verdict_dropped >> i) & 1u;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void noteScreened(uint32_t hash, bool dropped)
+	{
+		if (hash == 0) {
+			return;
+		}
+		_verdict_hash[_verdict_next] = hash;
+		_verdict_dropped = dropped ? (_verdict_dropped | (1u << _verdict_next)) : (_verdict_dropped & ~(1u << _verdict_next));
+		_verdict_next = (uint8_t)((_verdict_next + 1) % kVerdicts);
+	}
 
 	/* True when a drop rule silences this frame type: drop the frame. */
 	bool ruleDropped(const Prefs &p, uint8_t rule)

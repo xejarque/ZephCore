@@ -207,6 +207,7 @@ protected:
 
   bool allowPacketForward(const mesh::Packet* packet) override;
   bool filterRecvFloodPacket(mesh::Packet* packet) override;
+  bool screenFlood(const mesh::Packet* packet);
   const char* getLogDateTime() override;
   void logRxRaw(float snr, float rssi, const uint8_t raw[], int len) override;
 
