@@ -201,6 +201,8 @@ void MtRelayPort::queue(const uint8_t *relay, size_t len, int8_t snr_x4, mt::Rel
 			const Policy &policy)
 {
 	if (len > mt::kMaxTxFrame) {
+		LOG_WRN("mt: relay too long (len=%u)", (unsigned)len);
+		_stats.shed++;
 		return;
 	}
 	const uint32_t slot = slotMs();
