@@ -371,7 +371,7 @@ int CompanionMesh::mtFirstChannel() const
 bool CompanionMesh::mtKeyFor(uint32_t node, uint8_t key[PUB_KEY_SIZE])
 {
 	for (auto &e : _mt_keys) {
-		if (e.node == node && e.key[0] != 0) {
+		if (node != 0 && e.node == node) {
 			memcpy(key, e.key, PUB_KEY_SIZE);
 			return true;
 		}
@@ -867,10 +867,11 @@ bool CompanionMesh::mtSendDirectText(const ContactInfo &contact, const char *tex
 
 	if (n > 0 && mt::parseHeader(frame, n, h)) {
 		/* The packet id is what the node's ACK answers: the app's ack code. */
-		addPendingAck(h.id, mtContactIndex(contact));
-		ack = h.id;
-		_mtport.send(frame, n);
-		sent = true;
+		sent = _mtport.send(frame, n);
+		if (sent) {
+			addPendingAck(h.id, mtContactIndex(contact));
+			ack = h.id;
+		}
 	}
 	return true;
 }
@@ -907,7 +908,19 @@ void CompanionMesh::mtStoreKey(uint32_t node, const uint8_t key[32])
 	}
 	auto in_use = [](uint32_t n, void *self) { return static_cast<CompanionMesh *>(self)->mtKeyInUse(n); };
 
-	switch (_store->putMtKey(node, key, MAX_CONTACTS, in_use, this)) {
+	for (uint32_t n : _mt_key_stored) {
+		if (n == node) {
+			return;
+		}
+	}
+	const ZephyrDataStore::MtKeyResult r =
+		_store->putMtKey(node, key, MAX_CONTACTS, in_use, this, (uint32_t)getNumContacts());
+
+	if (r == ZephyrDataStore::MTKEY_STORED || r == ZephyrDataStore::MTKEY_SAME) {
+		_mt_key_stored[_mt_key_stored_next] = node;
+		_mt_key_stored_next = (uint8_t)((_mt_key_stored_next + 1) % MT_KEY_CACHE);
+	}
+	switch (r) {
 	case ZephyrDataStore::MTKEY_STORED:
 		LOG_INF("mt: key of %08x stored", (unsigned)node);
 		break;
@@ -976,6 +989,11 @@ void CompanionMesh::mtForgetContact(const ContactInfo &contact)
 
 	if (_store && mtNodeOf(contact, node)) {
 		_store->removeMtKey(node);
+		for (uint32_t &n : _mt_key_stored) {
+			if (n == node) {
+				n = 0;
+			}
+		}
 	}
 }
 

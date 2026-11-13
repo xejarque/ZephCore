@@ -39,9 +39,10 @@ public:
 	typedef bool (*MtKeyKeep)(uint32_t node, void *ctx);
 	bool getMtKey(uint32_t node, uint8_t key[32]);
 	/* A node's first key is kept: a different one is MTKEY_CONFLICT, as in
-	 * Meshtastic. At max_keys records, those keep() refuses are dropped first. */
+	 * Meshtastic. At max_keys records, those keep() refuses are dropped first; when
+	 * every record is kept, the file is not rewritten again until epoch changes. */
 	MtKeyResult putMtKey(uint32_t node, const uint8_t key[32], uint32_t max_keys, MtKeyKeep keep,
-			     void *ctx);
+			     void *ctx, uint32_t epoch);
 	bool removeMtKey(uint32_t node);
 
 	void loadChannels(DataStoreHost *host);
@@ -101,6 +102,7 @@ private:
 	mesh::RTCClock *_clock;
 	bool _has_ext_fs;
 	bool _mtkeys_all_in_use = false;
+	uint32_t _mtkeys_epoch = 0;
 
 	/* Get path based on external availability */
 	const char *contactsFile() const { return _has_ext_fs ? EXT_CONTACTS_FILE : INT_CONTACTS_FILE; }

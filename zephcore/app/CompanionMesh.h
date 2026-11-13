@@ -340,6 +340,8 @@ private:
 	MtSink _mt_sink{*this};
 	MtKey _mt_keys[MT_KEY_CACHE] = {};
 	uint8_t _mt_key_next = 0;
+	uint32_t _mt_key_stored[MT_KEY_CACHE] = {};  /* nodes whose key is in the file: no scan for their NodeInfo */
+	uint8_t _mt_key_stored_next = 0;
 	bool _mt_ready = false;
 	/* NodeInfo we send to a node on our own account (answering its request,
 	 * asking for a key we lack): once per node per interval. */

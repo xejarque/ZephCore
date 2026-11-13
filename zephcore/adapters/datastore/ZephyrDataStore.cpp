@@ -659,7 +659,8 @@ bool ZephyrDataStore::rewriteMtKeys(MtKeyKeep keep, void *ctx, uint32_t *kept)
 }
 
 ZephyrDataStore::MtKeyResult ZephyrDataStore::putMtKey(uint32_t node, const uint8_t key[32],
-						       uint32_t max_keys, MtKeyKeep keep, void *ctx)
+						       uint32_t max_keys, MtKeyKeep keep, void *ctx,
+						       uint32_t epoch)
 {
 	const char *path = mtKeysFile();
 	uint8_t have[32];
@@ -669,11 +670,13 @@ ZephyrDataStore::MtKeyResult ZephyrDataStore::putMtKey(uint32_t node, const uint
 		return memcmp(have, key, 32) == 0 ? MTKEY_SAME : MTKEY_CONFLICT;
 	}
 	if (count >= max_keys) {
-		/* Full of keys in use: nothing to drop until removeMtKey() frees one. */
-		if (_mtkeys_all_in_use || !rewriteMtKeys(keep, ctx, &count)) {
+		/* Full of keys in use: nothing to drop until removeMtKey() frees one or the
+		 * caller's epoch (the contacts) changes. */
+		if ((_mtkeys_all_in_use && _mtkeys_epoch == epoch) || !rewriteMtKeys(keep, ctx, &count)) {
 			return MTKEY_FAILED;
 		}
 		_mtkeys_all_in_use = count >= max_keys;
+		_mtkeys_epoch = epoch;
 		if (_mtkeys_all_in_use) {
 			return MTKEY_FAILED;
 		}
