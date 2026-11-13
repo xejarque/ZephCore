@@ -18,6 +18,8 @@
 namespace ping {
 
 static constexpr size_t kTriggerMax = 15;
+static constexpr uint16_t kAnswersPerWindow = 6;  /* answers one protocol gives ... */
+static constexpr uint32_t kAnswerWindowS = 60;    /* ... in this many seconds */
 static constexpr size_t kNameMax = 14;  /* bytes of a node name in an answer */
 
 /* The only channels the bot answers on. MeshCore: a hashtag channel, whose key is the
@@ -51,7 +53,7 @@ struct Prefs {
 /* Since boot; not persisted. */
 struct Counters {
 	uint16_t answered;
-	uint16_t ignored;  /* a ping the hop filters turned away */
+	uint16_t ignored;  /* a ping the hop filters or the answer limit turned away */
 };
 struct Stats {
 	Counters mc;

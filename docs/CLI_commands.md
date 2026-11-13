@@ -236,7 +236,7 @@ As upstream, the one setting is `gps` (`0`/`1`), listed only on a board with a G
 
 ## Help for the `z.` commands
 
-Put `help` at the end of any `get` or `set` of a `z.` command to read its usage instead of running it: `get z.mt.relay help` answers `> z.mt.relay: get|set off|essential|all: what is repeated`. On a group it lists the keys under it: `get z.mt help`, `get z.mc help`, `get z.ping help` (the list stops at the last whole name that fits the reply). A line that names no key goes on to its own command, so `set z.mt.channel.add Foo help` still adds a channel with that key. Every on/off setting of the `z.` commands takes `on`, `off`, `1` or `0`; `get` keeps answering `on` or `off`. Without Meshtastic in the build there is no `z.mt` help.
+Put `help` at the end of any `get` or `set` of a `z.` command to read its usage instead of running it: `get z.mt.relay help` answers `> z.mt.relay: get|set off|essential|all: what is repeated`. On a group it lists the keys under it: `get z.mt help`, `get z.mc help`, `get z.ping help` (the list stops at the last whole name that fits the reply). A line that names no key goes on to its own command, so `set z.mt.channel.add Foo help` still adds a channel with that key. A value that is the word `help` alone is read as a request for usage, so `help` cannot be a ping command or a channel name. Every on/off setting of the `z.` commands takes `on`, `off`, `1` or `0`; `get` keeps answering `on` or `off`. Without Meshtastic in the build there is no `z.mt` help.
 
 ## Meshtastic (Zephtacore, `CONFIG_ZEPHTACORE_MESHTASTIC`)
 
@@ -327,7 +327,7 @@ MeshCore flood packets carry the hash of every repeater they crossed, first repe
 | `get z.ping.ignore.direct` / `set z.ping.ignore.direct on\|off\|1\|0` | Do not answer a ping heard with 0 hops (default off). Shared. |
 | `get z.ping.ignore.remote` / `set z.ping.ignore.remote on\|off\|1\|0` | Do not answer a ping heard with 1 or more hops (default off). Shared. |
 
-Anyone on the channel can trigger an answer, and every ping is answered. On the companion the answer is also shown to the app as a message from this node. On the repeater, while the Meshtastic bot is on, frames on `Bots` follow the normal repeat policy instead of `z.mt.relay.opaque`. `z.mt.ping.*` does not exist in builds without Meshtastic. The Meshtastic bot answers only while `z.mt.enable` is on.
+Anyone on the channel can trigger an answer, so each protocol gives at most 6 answers a minute; a ping past that is not answered and counts as `ignored`. On the companion the answer is also shown to the app as a message from this node. On the repeater, while the Meshtastic bot is on, frames on `Bots` follow the normal repeat policy instead of `z.mt.relay.opaque`. `z.mt.ping.*` does not exist in builds without Meshtastic. The Meshtastic bot answers only while `z.mt.enable` is on.
 
 ---
 

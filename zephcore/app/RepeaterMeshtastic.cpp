@@ -140,6 +140,11 @@ void RepeaterMesh::mtPing(const char *text, size_t len, uint32_t id, int8_t snr_
 	if (n == 0) {
 		return;
 	}
+	if (!_ping_limit_mt.allow(getRTCClock()->getCurrentTime())) {
+		_ping_stats.mt = before;
+		_ping_stats.mt.ignored++;
+		return;
+	}
 	n = _mt.buildText(kBotChannel, mt::kBroadcast, out, n, frame, sizeof(frame), id);
 	if (n == 0 || !_mtport.send(frame, n)) {
 		_ping_stats.mt = before;

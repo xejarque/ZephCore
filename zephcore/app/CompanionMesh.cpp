@@ -1223,6 +1223,11 @@ void CompanionMesh::pingReply(ping::Protocol w, uint8_t channel_idx, ChannelDeta
 	if (n == 0) {
 		return;
 	}
+	if (!_ping_limit[w].allow(getRTCClock()->getCurrentTime())) {
+		counters = before;
+		counters.ignored++;
+		return;
+	}
 	const uint32_t ts = getRTCClock()->getCurrentTimeUnique();
 	bool sent;
 

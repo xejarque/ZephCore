@@ -593,6 +593,11 @@ void RepeaterMesh::onGroupDataRecv(mesh::Packet* packet, uint8_t type, const mes
                   out, sizeof(out)) == 0) {
     return;
   }
+  if (!_ping_limit_mc.allow(getRTCClock()->getCurrentTime())) {
+    _ping_stats.mc = before;
+    _ping_stats.mc.ignored++;
+    return;
+  }
   uint8_t temp[5 + sizeof(_prefs.node_name) + 2 + sizeof(out)];
   const uint32_t timestamp = getRTCClock()->getCurrentTimeUnique();
 

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <helpers/ContactChange.h>
+#include <helpers/RateLimiter.h>
 #include <helpers/BaseChatMesh.h>
 #include <helpers/BaseSerialInterface.h>
 #include <helpers/MeshTimeSync.h>
@@ -246,6 +247,8 @@ protected:
 	void pingReply(ping::Protocol w, uint8_t channel_idx, ChannelDetails &ch, const ping::Heard &heard, const char *text);
 	static int pingName(void *ctx, ping::Protocol w, const uint8_t *hash, uint8_t size, char *out, size_t cap);
 	ping::Stats _ping_stats = {};
+	RateLimiter _ping_limit[2] = {{ping::kAnswersPerWindow, ping::kAnswerWindowS},
+				      {ping::kAnswersPerWindow, ping::kAnswerWindowS}};  /* by protocol */
 	void onChannelDataRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint16_t data_type,
 		const uint8_t *data, size_t data_len) override;
 	uint8_t onContactRequest(const ContactInfo &contact, uint32_t sender_timestamp, const uint8_t *data, uint8_t len, uint8_t *reply) override;
