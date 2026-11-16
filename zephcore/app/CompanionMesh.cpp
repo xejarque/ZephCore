@@ -219,6 +219,11 @@ bool CompanionMesh::onContactPathRecv(ContactInfo &from, uint8_t *in_path, uint8
 		uint32_t tag;
 		memcpy(&tag, extra, 4);
 
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+		if (mtPhonePathDiscovered(tag, in_path, in_path_len, out_path, out_path_len)) {
+			return false;  // answered the phone's traceroute: no reciprocal path
+		}
+#endif
 		if (tag == _pending_discovery) {
 			_pending_discovery = 0;
 
@@ -781,6 +786,9 @@ void CompanionMesh::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8
 {
 	LOG_INF("onDiscoveredContact: '%s' is_new=%d path_len=%d num_contacts=%d",
 		contact.name, is_new, path_len, getNumContacts());
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	mtPhoneNoteContact(contact);
+#endif
 
 	/* is_new is upstream's "not in contacts[]": nothing stored changed, so
 	 * nothing to write. Otherwise an addition or a changed name, type or position
@@ -831,6 +839,9 @@ ContactInfo *CompanionMesh::processAck(const uint8_t *data)
 {
 	uint32_t ack_crc;
 	memcpy(&ack_crc, data, 4);
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	mtPhoneAcked(ack_crc);
+#endif
 
 	uint32_t sent_time = 0;
 	int contact_idx = findAndRemoveAck(ack_crc, &sent_time);
@@ -868,6 +879,9 @@ void CompanionMesh::onMessageRecv(const ContactInfo &contact, mesh::Packet *pkt,
 		contact.name, sender_timestamp, text);
 
 	markConnectionActive(contact);
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	mtPhoneDirectMessage(contact, pkt, text);
+#endif
 	queueMessage(contact, TXT_TYPE_PLAIN, pkt, sender_timestamp, nullptr, 0, text);
 	pushMsgWaiting();
 #if ZEPHCORE_HAS_UI_TASK
@@ -1144,6 +1158,9 @@ void CompanionMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh
 	uint32_t timestamp, const char *text)
 {
 	deliverChannelMessage(findChannelIdx(channel), pkt, timestamp, text);
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	mtPhoneChannelMessage(findChannelIdx(channel), pkt, text);
+#endif
 }
 
 void CompanionMesh::deliverChannelMessage(uint8_t channel_idx, mesh::Packet *pkt,
@@ -2971,6 +2988,23 @@ bool CompanionMesh::handleCmdSendStatusReq(const uint8_t *data, size_t len)
 	return true;
 }
 
+int CompanionMesh::sendPathDiscovery(ContactInfo &contact, uint32_t &tag, uint32_t &est_timeout)
+{
+	// Build telemetry request with only BASE permissions
+	uint8_t req_data[9];
+	req_data[0] = REQ_TYPE_GET_TELEMETRY_DATA;
+	req_data[1] = ~(TELEM_PERM_BASE);  // inverse permissions mask
+	memset(&req_data[2], 0, 3);  // reserved
+	getRNG()->random(&req_data[5], 4);  // random to make packet-hash unique
+
+	// Temporarily force flood
+	auto save = contact.out_path_len;
+	contact.out_path_len = OUT_PATH_UNKNOWN;
+	int result = sendRequest(contact, req_data, sizeof(req_data), tag, est_timeout);
+	contact.out_path_len = save;
+	return result;
+}
+
 bool CompanionMesh::handleCmdSendPathDiscoveryReq(const uint8_t *data, size_t len)
 {
 	if (len >= 2 + PUB_KEY_SIZE && data[1] == 0) {
@@ -2978,18 +3012,7 @@ bool CompanionMesh::handleCmdSendPathDiscoveryReq(const uint8_t *data, size_t le
 		ContactInfo *contact = lookupContactByPubKey(&data[2], PUB_KEY_SIZE);
 		if (contact) {
 			uint32_t tag, est_timeout;
-			// Build telemetry request with only BASE permissions
-			uint8_t req_data[9];
-			req_data[0] = REQ_TYPE_GET_TELEMETRY_DATA;
-			req_data[1] = ~(TELEM_PERM_BASE);  // inverse permissions mask
-			memset(&req_data[2], 0, 3);  // reserved
-			getRNG()->random(&req_data[5], 4);  // random to make packet-hash unique
-
-			// Temporarily force flood
-			auto save = contact->out_path_len;
-			contact->out_path_len = OUT_PATH_UNKNOWN;
-			int result = sendRequest(*contact, req_data, sizeof(req_data), tag, est_timeout);
-			contact->out_path_len = save;
+			int result = sendPathDiscovery(*contact, tag, est_timeout);
 
 			if (result != MSG_SEND_FAILED) {
 				clearPendingReqs();

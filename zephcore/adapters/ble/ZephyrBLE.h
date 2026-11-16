@@ -15,6 +15,9 @@
 #include <stddef.h>
 
 #include "companion_framing.h"  /* MAX_FRAME_SIZE, struct frame, companion_link_cbs */
+#ifdef CONFIG_ZEPHTACORE_MT_APP
+#include "ble_meshtastic.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,6 +30,10 @@ struct ble_callbacks {
 	/* Buttonless DFU control-point write — defer reboot into the
 	 * bootloader's BLE OTA mode. May be NULL (feature disabled). */
 	void (*on_dfu_request)(void);
+#ifdef CONFIG_ZEPHTACORE_MT_APP
+	/* Meshtastic phone link: events for main, post only. */
+	struct ble_mt_cbs mt;
+#endif
 };
 
 /** Register callbacks and auth handlers. Call before bt_enable(). */

@@ -1419,4 +1419,18 @@ config ZEPHTACORE_MT_HOP_LIMIT
 	  hop_start is lower than they expect only by policy, so match the
 	  network you join.
 
+config ZEPHTACORE_MT_APP
+	bool "Meshtastic phone app as a companion client"
+	depends on ZEPHTACORE_MESHTASTIC && ZEPHCORE_ROLE_COMPANION && BT
+	default n
+	help
+	  Adds the Meshtastic GATT service next to the MeshCore one, so the
+	  Meshtastic phone app can connect over BLE and read the node's
+	  channels and nodes, and send and receive text, private messages
+	  and traceroutes. One app is connected at a time. Costs about 5 KB
+	  of RAM for the link queues and the session (measure it with the
+	  build report), plus the client protocol code. Advertising both
+	  services leaves 11 characters for the name, so MeshCore apps see
+	  it shortened too.
+
 endmenu

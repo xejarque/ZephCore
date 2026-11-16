@@ -148,6 +148,11 @@ struct Capture : Sink {
     std::vector<uint32_t> unknown_keys;
     void onAck(uint32_t from, uint32_t id, uint32_t reason) override { acks.push_back({from, id, reason}); }
     void onNodeInfoRequest(uint8_t ch, uint32_t from) override { info_requests.push_back({ch, from}); }
+    struct Trace { uint32_t from, id; std::vector<uint32_t> route, back; };
+    std::vector<Trace> traces;
+    void onTraceroute(uint32_t from, uint32_t id, const uint32_t* r, size_t n, const uint32_t* b, size_t nb) override {
+        traces.push_back({from, id, std::vector<uint32_t>(r, r + n), std::vector<uint32_t>(b, b + nb)});
+    }
     void onUnknownKey(uint32_t from) override { unknown_keys.push_back(from); }
     bool peerKey(uint32_t node, uint8_t key[32]) override {
         for (auto& k : keys) if (k.first == node) { std::memcpy(key, k.second.data(), 32); return true; }
@@ -1573,4 +1578,25 @@ TEST(mt_fw_commands, "UNIT-FW-014", "z.mt.fw.* use the Meshtastic rule names and
     CHECK(run("set z.mt.fw.rate 12") == "OK" && p.hop_rate == 12 && run("get z.mt.fw.rate") == "> 12");
     CHECK(run("get z.mt.fw.stats") == "> gap 0, rate 0, drop 0");
     CHECK(run("set z.mt.fw.drop none", &changed) == "OK" && p.drop == 0 && changed);
+}
+
+TEST(mt_traceroute, "UNIT-MT-055", "A traceroute request goes on a channel, never PKI, and a RouteDiscovery decodes into its two node lists") {
+    PkiPair t;
+    uint8_t frame[kMaxFrame];
+    size_t n = t.a.buildTraceroute(3, 0xB2B2B2B2u, frame, sizeof(frame));
+    CHECK(n > 0);
+    CHECK(t.a.buildTraceroute(9, 0xB2B2B2B2u, frame, sizeof(frame)) == 0);  // no such channel
+    uint8_t relay[kMaxFrame];
+    size_t relay_len;
+    Capture cap;
+    n = t.a.buildTraceroute(3, 0xB2B2B2B2u, frame, sizeof(frame));
+    CHECK(t.b.handleFrame(frame, n, 0, cap, relay, &relay_len) == RX_HANDLED);  // on the channel, no PKI
+    const uint8_t rd[] = {0x0A, 0x08, 0x44, 0x33, 0x22, 0x11, 0x88, 0x77, 0x66, 0x55,
+                          0x1A, 0x04, 0xCC, 0xBB, 0xAA, 0x99};
+    uint32_t route[8], back[8];
+    size_t nr, nb;
+    CHECK(decodeRouteDiscovery(rd, sizeof(rd), route, 8, nr, back, 8, nb));
+    CHECK(nr == 2 && route[0] == 0x11223344u && route[1] == 0x55667788u && nb == 1 && back[0] == 0x99AABBCCu);
+    CHECK(decodeRouteDiscovery(rd, 5, route, 8, nr, back, 8, nb) == false);  // cut inside the list
+    CHECK(decodeRouteDiscovery(rd, 0, route, 8, nr, back, 8, nb) && nr == 0 && nb == 0);
 }

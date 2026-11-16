@@ -213,6 +213,101 @@
       "source": "tests/unit/lora_timing_tests.cpp"
     },
     {
+      "id": "UNIT-MT-055",
+      "name": "A traceroute request goes on a channel, never PKI, and a RouteDiscovery decodes into its two node lists",
+      "source": "tests/unit/meshtastic_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-001",
+      "name": "ToRadio want_config_id decodes; the heartbeat and disconnect variants are recognised",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-002",
+      "name": "ToRadio packet with a text decodes its addressing, id, ACK request and payload",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-003",
+      "name": "A truncated ToRadio is refused, not half read",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-004",
+      "name": "FromRadio config_complete, queue status, my_info and channel match the golden bytes",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-005",
+      "name": "FromRadio metadata carries the firmware version and the capability flags",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-006",
+      "name": "A packet for the phone keeps its fields when read back as a MeshPacket",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-007",
+      "name": "NodeInfo for the phone starts with the node number and its user, and refuses a short buffer",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-008",
+      "name": "Every FromRadio encoder reports 0 when the output buffer is too small",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-009",
+      "name": "want_config_id gets my_info, metadata, 8 channels, the nodes and config_complete, in that order",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-010",
+      "name": "Packets heard are queued only after the download, bump fromNum and are dropped oldest first when full",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-011",
+      "name": "A packet from the phone goes to the host and is answered with a queue status; a refusal says so",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-012",
+      "name": "disconnect and a new want_config_id restart the session and empty the queue",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-013",
+      "name": "A node heard after the download is queued as NodeInfo; before it, nothing",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-014",
+      "name": "The two-stage handshake: 69420 gets config and channels and no nodes, 69421 only the nodes, each closed with its own id",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-015",
+      "name": "RouteDiscovery packs the route and the way back as fixed32 lists, with unmeasured SNR per link",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-016",
+      "name": "A MeshCore key gives its first four bytes as node number, reserved values move to MC, synthetic ones have the top bit",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-017",
+      "name": "The longest text and the longest traceroute reply still fit a queue slot",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
+      "id": "UNIT-MTPHONE-018",
+      "name": "A want_config in the middle of the download starts it again from my_info",
+      "source": "tests/unit/meshtastic_phone_tests.cpp"
+    },
+    {
       "id": "UNIT-NOISE-001",
       "name": "Noise floor seeds from the first sample within the clamp window",
       "source": "tests/unit/radio_tests.cpp"

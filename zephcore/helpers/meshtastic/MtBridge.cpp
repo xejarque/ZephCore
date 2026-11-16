@@ -382,6 +382,13 @@ void Bridge::deliverData(const Header &h, const Data &d, uint8_t channel_id, int
 		if (decodePosition(d.payload, d.payload_len, p) && p.has_lat && p.has_lon) {
 			sink.onPosition(h.from, p);
 		}
+	} else if (d.portnum == PORT_TRACEROUTE && h.to == _self && d.request_id != 0) {
+		uint32_t route[8], back[8];
+		size_t n, nb;
+
+		if (decodeRouteDiscovery(d.payload, d.payload_len, route, 8, n, back, 8, nb)) {
+			sink.onTraceroute(h.from, d.request_id, route, n, back, nb);
+		}
 	} else if (d.portnum == PORT_ROUTING && h.to == _self && d.request_id != 0) {
 		uint32_t reason;
 
@@ -490,6 +497,13 @@ size_t Bridge::buildDirectText(uint32_t to, const uint8_t peer_pub[32], const ch
 	}
 	return buildFrame(nullptr, key, to, PORT_TEXT, (const uint8_t *)text, len, out, cap, reply_id,
 			  0, false, want_ack);
+}
+
+size_t Bridge::buildTraceroute(uint8_t channel_id, uint32_t to, uint8_t *out, size_t cap)
+{
+	const Channel *ch = find(channel_id);
+
+	return ch ? buildFrame(ch, nullptr, to, PORT_TRACEROUTE, nullptr, 0, out, cap, 0, 0, true) : 0;
 }
 
 size_t Bridge::buildAck(uint32_t to, uint32_t request_id, const uint8_t peer_pub[32], uint8_t *out,

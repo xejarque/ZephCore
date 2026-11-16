@@ -77,3 +77,13 @@ default channels and node name in order.
 
 - SX126x: changing the sync word between MeshCore and Meshtastic no longer waits for the radio's
   sleep phase when RX duty cycle is on.
+
+---
+
+## Meshtastic phone app (companion)
+
+- With `boards/common/zephtacore_app.conf` the companion also speaks the Meshtastic client protocol over BLE, so the
+  Meshtastic app can connect next to the MeshCore one (one at a time). It lists the Meshtastic channels and then the
+  MeshCore ones as `MC:<name>`, every contact as a node, and sends and receives text, private messages and
+  traceroutes. Settings are still changed from the CLI. The advertised name is cut to 11 characters. See
+  `docs/adr/0017-meshtastic-phone-app.md`.

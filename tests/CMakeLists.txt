@@ -23,6 +23,7 @@ add_executable(zephcore_unit
   unit/kiss_modem_tests.cpp
   unit/chat_contacts_tests.cpp
   unit/meshtastic_tests.cpp
+  unit/meshtastic_phone_tests.cpp
   unit/neighbour_tests.cpp
   unit/ping_tests.cpp
   unit/fw_tests.cpp
@@ -51,6 +52,8 @@ add_executable(zephcore_unit
   ${PRODUCTION}/helpers/ui/telemetry_text.cpp
   ${PRODUCTION}/app/KissModem.cpp
   ${PRODUCTION}/helpers/meshtastic/MtWire.cpp
+  ${PRODUCTION}/helpers/meshtastic/MtPhoneWire.cpp
+  ${PRODUCTION}/helpers/meshtastic/MtPhoneApi.cpp
   ${PRODUCTION}/helpers/meshtastic/MtBridge.cpp
   ${PRODUCTION}/helpers/meshtastic/MtPki.cpp
   ${PRODUCTION}/helpers/meshtastic/MtConfig.cpp

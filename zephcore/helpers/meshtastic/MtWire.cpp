@@ -4,10 +4,13 @@
  */
 
 #include "MtWire.h"
+#include "MtProto.h"
 
 #include <string.h>
 
 namespace mt {
+
+using namespace proto;
 
 static uint32_t rd32(const uint8_t *p)
 {
@@ -122,150 +125,6 @@ uint8_t channelHash(const char *name, const uint8_t key[16], bool encrypted)
 
 namespace {
 
-enum { WT_VARINT = 0, WT_I64 = 1, WT_LEN = 2, WT_I32 = 5 };
-
-struct Reader {
-	const uint8_t *p;
-	const uint8_t *end;
-
-	bool varint(uint64_t &v)
-	{
-		v = 0;
-		for (int shift = 0; shift < 70; shift += 7) {
-			if (p >= end) {
-				return false;
-			}
-			uint8_t b = *p++;
-
-			v |= (uint64_t)(b & 0x7F) << shift;
-			if (!(b & 0x80)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	bool fixed32(uint32_t &v)
-	{
-		if (end - p < 4) {
-			return false;
-		}
-		v = rd32(p);
-		p += 4;
-		return true;
-	}
-
-	bool bytes(const uint8_t *&data, size_t &n)
-	{
-		uint64_t l;
-
-		if (!varint(l) || l > (uint64_t)(end - p)) {
-			return false;
-		}
-		data = p;
-		n = (size_t)l;
-		p += n;
-		return true;
-	}
-
-	/* Next field header; false at a clean end of buffer. */
-	bool field(uint32_t &num, uint32_t &wt, bool &error)
-	{
-		if (p >= end) {
-			return false;
-		}
-		uint64_t tag;
-
-		if (!varint(tag) || (tag >> 3) == 0 || (tag >> 3) > 0x1FFFFFFF) {
-			error = true;
-			return false;
-		}
-		num = (uint32_t)(tag >> 3);
-		wt = (uint32_t)(tag & 7);
-		return true;
-	}
-
-	bool skip(uint32_t wt)
-	{
-		uint64_t v;
-		const uint8_t *d;
-		size_t n;
-
-		switch (wt) {
-		case WT_VARINT:
-			return varint(v);
-		case WT_I64:
-			if (end - p < 8) {
-				return false;
-			}
-			p += 8;
-			return true;
-		case WT_LEN:
-			return bytes(d, n);
-		case WT_I32:
-			if (end - p < 4) {
-				return false;
-			}
-			p += 4;
-			return true;
-		default:  /* groups and the reserved types are never valid here */
-			return false;
-		}
-	}
-};
-
-struct Writer {
-	uint8_t *p;
-	uint8_t *end;
-	bool ok = true;
-
-	void put(uint8_t b)
-	{
-		if (p >= end) {
-			ok = false;
-			return;
-		}
-		*p++ = b;
-	}
-
-	void varint(uint64_t v)
-	{
-		while (v >= 0x80) {
-			put((uint8_t)(v | 0x80));
-			v >>= 7;
-		}
-		put((uint8_t)v);
-	}
-
-	void tag(uint32_t num, uint32_t wt) { varint(((uint64_t)num << 3) | wt); }
-
-	void fixed32(uint32_t num, uint32_t v)
-	{
-		tag(num, WT_I32);
-		for (int i = 0; i < 4; i++) {
-			put((uint8_t)(v >> (8 * i)));
-		}
-	}
-
-	void uint(uint32_t num, uint64_t v)
-	{
-		tag(num, WT_VARINT);
-		varint(v);
-	}
-
-	void bytes(uint32_t num, const uint8_t *d, size_t n)
-	{
-		tag(num, WT_LEN);
-		varint(n);
-		if ((size_t)(end - p) < n) {
-			ok = false;
-			return;
-		}
-		memcpy(p, d, n);
-		p += n;
-	}
-};
-
 void copyStr(char *dst, size_t cap, const uint8_t *src, size_t n)
 {
 	if (n >= cap) {
@@ -354,6 +213,37 @@ size_t encodeData(const Data &d, uint8_t *out, size_t cap)
 		w.fixed32(8, d.emoji);
 	}
 	return w.ok ? (size_t)(w.p - out) : 0;
+}
+
+bool decodeRouteDiscovery(const uint8_t *buf, size_t len, uint32_t *route, size_t max, size_t &n,
+			  uint32_t *back, size_t maxb, size_t &nb)
+{
+	Reader r{buf, buf + len};
+	bool err = false;
+	uint32_t num, wt;
+
+	n = nb = 0;
+	while (r.field(num, wt, err)) {
+		const uint8_t *d;
+		size_t l;
+
+		if ((num == 1 || num == 3) && wt == WT_LEN) {
+			if (!r.bytes(d, l) || l % 4) {
+				return false;
+			}
+			uint32_t *dst = num == 1 ? route : back;
+			size_t cap = num == 1 ? max : maxb;
+			size_t &cnt = num == 1 ? n : nb;
+
+			for (size_t i = 0; i + 4 <= l && cnt < cap; i += 4) {
+				dst[cnt++] = (uint32_t)d[i] | ((uint32_t)d[i + 1] << 8) |
+					     ((uint32_t)d[i + 2] << 16) | ((uint32_t)d[i + 3] << 24);
+			}
+		} else if (!r.skip(wt)) {
+			return false;
+		}
+	}
+	return !err;
 }
 
 bool decodeRouting(const uint8_t *buf, size_t len, uint32_t &error_reason)

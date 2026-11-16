@@ -173,6 +173,9 @@ jobs:
     - name: compile-only roles (zephtacore companion)
       run: west build -b wio_tracker_l1 zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/zephtacore.conf"
 
+    - name: compile-only roles (zephtacore phone app)
+      run: west build -b wio_tracker_l1 zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/zephtacore.conf;boards/common/zephtacore_app.conf"
+
     - name: compile-only roles (zephtacore repeater)
       run: west build -b wio_tracker_l1 zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/repeater.conf;boards/common/zephtacore.conf"
 

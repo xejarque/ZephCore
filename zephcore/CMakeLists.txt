@@ -672,6 +672,14 @@ else()
       helpers/meshtastic/MtPki.cpp
       helpers/meshtastic/MtConfig.cpp
     )
+    if(CONFIG_ZEPHTACORE_MT_APP AND CONFIG_BT)
+      message(STATUS "Zephtacore: Meshtastic phone app over BLE")
+      target_sources(app PRIVATE
+        helpers/meshtastic/MtPhoneWire.cpp
+        helpers/meshtastic/MtPhoneApi.cpp
+        adapters/ble/ble_meshtastic.cpp
+      )
+    endif()
   endif()
   # Companion transports: main_companion.cpp registers every one the build
   # has in upstream's MultiSerialInterface — BLE NUS when there is a

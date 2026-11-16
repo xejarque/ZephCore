@@ -79,8 +79,14 @@ size_t encodeData(const Data &d, uint8_t *out, size_t cap);
 
 /* Routing.error_reason of a routing payload: 0 is an ACK, anything else a NAK
  * (PKI_UNKNOWN_PUBKEY is 35). False when the payload carries none. */
+static constexpr uint32_t ROUTING_MAX_RETRANSMIT = 5;
 static constexpr uint32_t ROUTING_PKI_UNKNOWN_PUBKEY = 35;
 bool decodeRouting(const uint8_t *buf, size_t len, uint32_t &error_reason);
+
+/* RouteDiscovery of a traceroute: the nodes it went through (route) and came back
+ * through (route_back), at most max each; n and nb count what was stored. */
+bool decodeRouteDiscovery(const uint8_t *buf, size_t len, uint32_t *route, size_t max, size_t &n,
+			  uint32_t *back, size_t maxb, size_t &nb);
 
 struct Position {
 	bool has_lat, has_lon;

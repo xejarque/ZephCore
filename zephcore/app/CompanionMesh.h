@@ -23,6 +23,9 @@
 #include "MtRelayPort.h"
 #include <helpers/meshtastic/MtPolicy.h>
 #endif
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+#include <helpers/meshtastic/MtPhoneApi.h>
+#endif
 
 /* Push notification codes */
 #define PUSH_CODE_ADVERT              0x80
@@ -331,6 +334,8 @@ private:
 		bool peerKey(uint32_t node, uint8_t key[32]) override;
 		void onAck(uint32_t from, uint32_t request_id, uint32_t error_reason) override;
 		void onNodeInfoRequest(uint8_t channel_id, uint32_t from) override;
+		void onTraceroute(uint32_t from, uint32_t request_id, const uint32_t *route, size_t n,
+				  const uint32_t *back, size_t nb) override;
 		void onUnknownKey(uint32_t from) override;
 	};
 	struct MtKey {
@@ -353,6 +358,7 @@ private:
 	 * can be shown to the app as a MeshCore repeat of the same message. */
 	struct MtSent {
 		uint32_t id;
+		uint32_t phone_id;  /* the id the phone app gave the text, 0 when it came from the MeshCore app */
 		uint32_t timestamp;
 		uint8_t channel;
 		uint8_t len;
@@ -395,7 +401,8 @@ private:
 	const char *mtRecentName(uint32_t id) const;
 	uint32_t mtReplyTarget(const char *text, size_t len, const char **body, size_t *body_len) const;
 	/* App commands; false when the channel or contact is not a Meshtastic one. */
-	bool mtSendChannelText(int ch_idx, uint32_t timestamp, const char *text, size_t len, bool &sent);
+	bool mtSendChannelText(int ch_idx, uint32_t timestamp, const char *text, size_t len, bool &sent,
+			       uint32_t reply_id = 0);
 	void mtEchoHeard(uint32_t id, uint8_t relay, float snr, float rssi);
 	bool mtSendDirectText(const ContactInfo &contact, const char *text, size_t len, bool &sent,
 			      uint32_t &ack);
@@ -410,6 +417,70 @@ private:
 	bool mtFavouriteAsks(const ContactInfo &existing, uint8_t new_flags, uint32_t node);
 	int mtContactIndex(const ContactInfo &contact);
 	void mtForgetContact(const ContactInfo &contact);
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	/* The node as the phone app sees it: the app's table holds 8 channels, the
+	 * first 8 Meshtastic ones of ours in slot order, and the nodes are our
+	 * Meshtastic contacts, ourselves first. */
+	struct MtPhoneHost : mt::PhoneHost {
+		CompanionMesh &m;
+		explicit MtPhoneHost(CompanionMesh &mesh) : m(mesh) {}
+		uint32_t selfNode() override;
+		uint32_t rebootCount() override { return 1; }
+		mt::PhoneMetadata metadata() override;
+		bool channelAt(uint8_t index, mt::PhoneChannel &ch) override;
+		uint32_t nodeCount() override;
+		bool nodeAt(uint32_t index, mt::PhoneNode &n) override;
+		bool sendFromPhone(const mt::PhonePacket &p) override;
+	};
+	MtPhoneHost _mt_phone_host{*this};
+	mt::PhoneApi _mt_phone{_mt_phone_host};
+	/* The app's table: Meshtastic channels first, then MeshCore ones, 8 at most. */
+	int mtPhoneSlot(uint8_t app_index);
+	int mtPhoneIndex(int slot);
+	/* The number of a contact in the app: its node number, or the start of its key for MeshCore. */
+	uint32_t mtPhoneNodeNum(const ContactInfo &c);
+	bool mtPhoneContactOf(uint32_t node, ContactInfo &c);
+	uint32_t _mt_phone_msg_id = 0;  /* ids of the packets we hand the phone */
+	uint32_t mtPhoneNextId();
+	void mtPhoneNodeOf(const ContactInfo &c, mt::PhoneNode &n);
+	void mtPhonePushContact(const ContactInfo &c);
+	void mtPhoneNoteContact(const ContactInfo &c);
+	/* An ACK for a packet of the phone: from a node that repeated it, or the one it was sent to. */
+	void mtPhonePushAck(uint32_t request_id, uint32_t from, uint8_t error = 0);
+	void mtPhoneChannelMessage(int slot, mesh::Packet *pkt, const char *text);
+	void mtPhoneDirectMessage(const ContactInfo &c, mesh::Packet *pkt, const char *text);
+	/* Messages of the phone waiting for their ACK: the code on the air and the id the app gave it. */
+	struct MtPhonePending {
+		uint32_t ack;
+		uint32_t phone_id;
+		uint32_t node;
+	};
+	static constexpr int MT_PHONE_PENDING = 4;
+	MtPhonePending _mt_phone_dm[MT_PHONE_PENDING] = {};
+	uint8_t _mt_phone_dm_next = 0;
+	void mtPhoneRememberDm(uint32_t ack, uint32_t phone_id, uint32_t node);
+	void mtPhoneAcked(uint32_t ack);
+	/* An ACK due once the session has queued the status of what the phone just sent. */
+	uint32_t _mt_phone_ack_id = 0;
+	uint32_t _mt_phone_ack_from = 0;
+	bool mtPhoneSendChannel(const mt::PhonePacket &p);
+	bool mtPhoneSendDirect(const mt::PhonePacket &p);
+	/* Traceroute to a MeshCore contact: the request in flight, and who asked. */
+	uint32_t _mt_phone_trace_tag = 0;
+	uint32_t _mt_phone_trace_id = 0;
+	uint32_t _mt_phone_trace_node = 0;
+	bool mtPhoneTraceroute(const mt::PhonePacket &p);
+	bool mtPhoneRequestUserInfo(const mt::PhonePacket &p);
+	bool mtPhoneTraceNode(const ContactInfo &c, const mt::PhonePacket &p);
+	void mtPhoneTraceDone(uint32_t from, uint32_t request_id, const uint32_t *route, size_t n,
+			      const uint32_t *back, size_t nb);
+	void mtPhonePushRoute(const uint32_t *route, size_t n, const uint32_t *back, size_t nb);
+	uint32_t mtPhoneNodeOfHash(const uint8_t *hash, uint8_t size);
+	bool mtPhonePathDiscovered(uint32_t tag, uint8_t *in_path, uint8_t in_len, uint8_t *out_path,
+				   uint8_t out_len);
+	void mtPhonePushText(uint8_t slot, uint32_t from, uint32_t to, uint32_t id, uint32_t reply_id,
+			     const char *text, size_t len, int8_t snr_x4, uint8_t hops, uint8_t relay);
+#endif
 public:
 	/* Bump when the default channel list changes; the next boot adds what is missing. */
 	static constexpr uint8_t MT_DEFAULTS_REV = 2;
@@ -434,6 +505,15 @@ public:
 	void mtFormatStats(char *reply, size_t cap) const;
 	void mtFormatNeighbours(char *reply, size_t cap, size_t page, bool recent);
 	void mtFillDashboard(struct ui_dash &d);
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	/* ---- Meshtastic phone app, see app/CompanionMeshtastic.cpp ----
+	 * Main thread only: the BLE service hands frames over through two queues
+	 * (adapters/ble/ble_meshtastic.h). */
+	void mtPhoneToRadio(const uint8_t *frame, size_t len);
+	size_t mtPhoneRead(uint8_t *out, size_t cap) { return _mt_phone.read(out, cap); }
+	uint32_t mtPhoneFromNum() const { return _mt_phone.fromNum(); }
+	void mtPhoneEnd() { _mt_phone.reset(); }
+#endif
 private:
 #endif
 	ZephyrDataStore *_store;
@@ -580,6 +660,8 @@ private:
 	bool handleCmdSendLogin(const uint8_t *data, size_t len);
 	bool handleCmdSendAnonReq(const uint8_t *data, size_t len);
 	bool handleCmdSendStatusReq(const uint8_t *data, size_t len);
+	/* The flooded telemetry request a path discovery is; the contact's stored path is left as it was. */
+	int sendPathDiscovery(ContactInfo &contact, uint32_t &tag, uint32_t &est_timeout);
 	bool handleCmdSendPathDiscoveryReq(const uint8_t *data, size_t len);
 	bool handleCmdSendTelemetryReq(const uint8_t *data, size_t len);
 	bool handleCmdSendBinaryReq(const uint8_t *data, size_t len);

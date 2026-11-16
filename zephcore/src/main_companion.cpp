@@ -102,6 +102,11 @@ extern "C" void bt_ctlr_assert_handle(char *file, uint32_t line)
 #define MESH_EVENT_CONTACT_ITER  BIT(MESH_EVENT_ROLE_BASE + 3)  /* Continue contact-dump iteration on main thread */
 #define MESH_EVENT_LINK          BIT(MESH_EVENT_ROLE_BASE + 4)  /* A transport connected or disconnected */
 #define MESH_EVENT_PERSIST       BIT(MESH_EVENT_ROLE_BASE + 5)  /* Flush deferred writes: a reboot/power-off waits on it */
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+#define MESH_EVENT_MT_APP        BIT(MESH_EVENT_ROLE_BASE + 6)  /* Meshtastic phone link: a ToRadio waits, room for a FromRadio, or the phone left */
+#else
+#define MESH_EVENT_MT_APP        0
+#endif
 
 #ifdef ZEPHCORE_LORA
 static void save_prefs_to_flash(void);
@@ -111,7 +116,8 @@ static void power_policy_tick(void);
 #define MESH_EVENT_BASE          (MESH_EVENT_LORA_RX | MESH_EVENT_LORA_TX_DONE | \
 	MESH_EVENT_BLE_RX | MESH_EVENT_HOUSEKEEPING | MESH_EVENT_UI_ACTION |  \
 	MESH_EVENT_GPS_ACTION | MESH_EVENT_TX_DRAIN | MESH_EVENT_PREFS_DIRTY | \
-	MESH_EVENT_CONTACT_ITER | MESH_EVENT_LINK | MESH_EVENT_PERSIST)
+	MESH_EVENT_CONTACT_ITER | MESH_EVENT_LINK | MESH_EVENT_PERSIST | \
+	MESH_EVENT_MT_APP)
 #if IS_ENABLED(CONFIG_ZEPHCORE_UI_DESIGN_JOYSTICK)
 #define MESH_EVENT_ALL           (MESH_EVENT_BASE | MESH_EVENT_JOYSTICK_LOOP)
 #else
@@ -264,10 +270,33 @@ static void ble_on_dfu_request(void)
 }
 #endif
 
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+static atomic_t mt_link_lost;
+
+/* The Meshtastic service raises these from the BT thread: post only. */
+static void mt_on_event(void)
+{
+	k_event_post(&mesh_events, MESH_EVENT_MT_APP);
+}
+
+static void mt_on_link_lost(void)
+{
+	atomic_set(&mt_link_lost, 1);
+	mt_on_event();
+}
+#endif
+
 static const struct ble_callbacks ble_cbs = {
 	.link = link_cbs,
 #if IS_ENABLED(CONFIG_ZEPHCORE_BLE_DFU)
 	.on_dfu_request = ble_on_dfu_request,
+#endif
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	.mt = {
+		.on_to_radio = mt_on_event,
+		.on_from_read = mt_on_event,
+		.on_link_lost = mt_on_link_lost,
+	},
 #endif
 };
 #endif
@@ -333,6 +362,47 @@ static bool companion_transport_up(void)
 }
 
 /* Inbound binary frames, on MESH_EVENT_BLE_RX. */
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP) && defined(ZEPHCORE_LORA)
+/* Main thread: the phone's ToRadio frames go to the session, and its FromRadio
+ * frames to the BLE queue for as long as that has room. A frame the queue
+ * refused is held until the phone has read one. */
+static void mt_phone_pump(CompanionMesh &mesh)
+{
+	static uint8_t held[BLE_MT_FRAME_MAX];
+	static size_t held_len;
+	uint8_t buf[BLE_MT_FRAME_MAX];
+	size_t n;
+	bool queued = false;
+
+	if (atomic_clear(&mt_link_lost)) {
+		mesh.mtPhoneEnd();
+		held_len = 0;
+		zephcore_ble_mt_flush();  /* only this thread queues: nothing of the old session can follow */
+	}
+	while ((n = zephcore_ble_mt_recv(buf)) != 0) {
+		printk("MTDBG toradio len=%u\n", (unsigned)n);
+		mesh.mtPhoneToRadio(buf, n);
+	}
+	for (;;) {
+		if (held_len == 0) {
+			held_len = mesh.mtPhoneRead(held, sizeof(held));
+			if (held_len == 0) {
+				break;
+			}
+			printk("MTDBG frame tag=%02x len=%u\n", held[0], (unsigned)held_len);
+		}
+		if (!zephcore_ble_mt_offer(held, (uint16_t)held_len)) {
+			break;
+		}
+		held_len = 0;
+		queued = true;
+	}
+	if (queued) {
+		zephcore_ble_mt_notify(mesh.mtPhoneFromNum());
+	}
+}
+#endif
+
 static void process_companion_rx(void)
 {
 	uint8_t buf[MAX_FRAME_SIZE];
@@ -449,6 +519,13 @@ static void mesh_event_loop(void)
 			       MESH_EVENT_HOUSEKEEPING))) {
 			companion_mesh_ptr->loop();
 		}
+
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+		/* After loop(): what the radio just delivered is queued for the phone. */
+		if (companion_mesh_ptr) {
+			mt_phone_pump(*companion_mesh_ptr);
+		}
+#endif
 
 		if (events & MESH_EVENT_HOUSEKEEPING) {
 			/* Noise floor, adaptive-CAD probe, RX watchdog: never on

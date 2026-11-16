@@ -84,7 +84,15 @@ static const uint8_t ad_flags = BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR;
 static const int8_t ad_tx_power = BLE_TX_POWER;
 static const uint8_t nus_uuid[] = { BT_UUID_NUS_SRV_VAL };
 static struct bt_data ad[3];
+#ifdef CONFIG_ZEPHTACORE_MT_APP
+/* Meshtastic's service goes in the scan response: the advertisement is full
+ * with the NUS UUID. Its 18 bytes leave room for 11 of the name. */
+static const uint8_t mt_uuid[] = { BT_UUID_128_ENCODE(0x6ba1b218, 0x15a8, 0x461f, 0x9fa8, 0x5dcae273eafd) };
+#define SD_NAME_MAX 11
+static struct bt_data sd[2];
+#else
 static struct bt_data sd[1];
+#endif
 static size_t ad_len;
 static size_t sd_len;
 
@@ -284,10 +292,21 @@ static void build_device_name_and_adv(const char *name_from_prefs)
 	ad[2].data = nus_uuid;
 	ad_len = 3;
 
+#ifdef CONFIG_ZEPHTACORE_MT_APP
+	sd[0].type = BT_DATA_UUID128_ALL;
+	sd[0].data_len = sizeof(mt_uuid);
+	sd[0].data = mt_uuid;
+	size_t name_len = strlen(device_name);
+	sd[1].type = name_len > SD_NAME_MAX ? BT_DATA_NAME_SHORTENED : BT_DATA_NAME_COMPLETE;
+	sd[1].data_len = (uint8_t)(name_len > SD_NAME_MAX ? SD_NAME_MAX : name_len);
+	sd[1].data = (const uint8_t *)device_name;
+	sd_len = 2;
+#else
 	sd[0].type = BT_DATA_NAME_COMPLETE;
 	sd[0].data_len = (uint8_t)strlen(device_name);
 	sd[0].data = (const uint8_t *)device_name;
 	sd_len = 1;
+#endif
 
 	LOG_DBG("%s", device_name);
 }
@@ -377,6 +396,10 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	tx_retry_pending = false;
 
 	k_work_cancel_delayable(&tx_drain_work);
+
+#ifdef CONFIG_ZEPHTACORE_MT_APP
+	zephcore_ble_mt_disconnected();
+#endif
 
 #if IS_ENABLED(CONFIG_BT_GATT_SERVICE_CHANGED)
 	ble_gatt_layout_disconnected();
@@ -834,6 +857,10 @@ void zephcore_ble_init(const struct ble_callbacks *cbs)
 	 * (attrs[0]=service, attrs[1]=TX char decl, attrs[2]=TX char value,
 	 * attrs[3]=CCC, attrs[4]=RX char decl, attrs[5]=RX char value). */
 	nus_tx_attr = &secure_nus_svc.attrs[2];
+
+#ifdef CONFIG_ZEPHTACORE_MT_APP
+	zephcore_ble_mt_init(&cbs->mt);
+#endif
 
 	bt_conn_auth_cb_register(&auth_cb);
 	bt_conn_auth_info_cb_register(&auth_info_cb);

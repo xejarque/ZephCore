@@ -69,6 +69,12 @@ public:
 	{
 		(void)from; (void)request_id; (void)error_reason;
 	}
+	/* The answer to a traceroute of ours: the nodes it crossed each way. */
+	virtual void onTraceroute(uint32_t from, uint32_t request_id, const uint32_t *route, size_t n,
+				  const uint32_t *back, size_t nb)
+	{
+		(void)from; (void)request_id; (void)route; (void)n; (void)back; (void)nb;
+	}
 	/* A node sent us its NodeInfo asking for ours. channel_id is the channel it
 	 * came on, kNoChannel when it came as PKI. */
 	virtual void onNodeInfoRequest(uint8_t channel_id, uint32_t from)
@@ -155,6 +161,9 @@ public:
 	/* PKI frames to a node whose public key is peer_pub. 0 without PKI or on a weak key. */
 	size_t buildDirectText(uint32_t to, const uint8_t peer_pub[32], const char *text, size_t len,
 			       uint8_t *out, size_t cap, uint32_t reply_id = 0, bool want_ack = false);
+	/* Traceroute request to a node, on a channel: PKI is never used for it, so that the
+	 * nodes on the way can write themselves into the route. */
+	size_t buildTraceroute(uint8_t channel_id, uint32_t to, uint8_t *out, size_t cap);
 	size_t buildAck(uint32_t to, uint32_t request_id, const uint8_t peer_pub[32], uint8_t *out,
 			size_t cap);
 

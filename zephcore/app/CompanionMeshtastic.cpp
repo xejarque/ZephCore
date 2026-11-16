@@ -21,6 +21,9 @@
 #if IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC)
 
 #include <helpers/meshtastic/MtConfig.h>
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+#include <helpers/SensorManager.h>
+#endif
 #include <mesh/Utils.h>
 #include <string.h>
 #include <stdio.h>
@@ -474,6 +477,9 @@ void CompanionMesh::mtUpsertContact(uint32_t node, const char *name, bool has_po
 	c->lastmod = now;
 	onDiscoveredContact(*c, is_new, 0, nullptr);
 	_advert_prev.known = false;
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	mtPhonePushContact(*c);
+#endif
 }
 
 /* ── RX ───────────────────────────────────────────────────────────────── */
@@ -513,6 +519,7 @@ void CompanionMesh::MtSink::onText(uint8_t channel_id, uint32_t from, uint32_t t
 {
 	(void)to;
 
+	const size_t len0 = len;  /* the line below is cut to the MeshCore limit; the phone gets the whole text */
 	ChannelDetails ch;
 
 	if (!m.getChannel(channel_id, ch)) {
@@ -564,6 +571,9 @@ void CompanionMesh::MtSink::onText(uint8_t channel_id, uint32_t from, uint32_t t
 	if (pkt) {
 		m.releasePacket(pkt);
 	}
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	m.mtPhonePushText(channel_id, from, to, id, reply_id, text, len0, snr_x4, hops, relay);
+#endif
 	char bot_slot[mt::kSlotNameMax];
 
 	mt::slotName(PING_MT_CHANNEL, bot_slot);
@@ -637,6 +647,16 @@ void CompanionMesh::MtSink::onAck(uint32_t from, uint32_t request_id, uint32_t e
 	}
 }
 
+void CompanionMesh::MtSink::onTraceroute(uint32_t from, uint32_t request_id, const uint32_t *route,
+					 size_t n, const uint32_t *back, size_t nb)
+{
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	m.mtPhoneTraceDone(from, request_id, route, n, back, nb);
+#else
+	(void)from; (void)request_id; (void)route; (void)n; (void)back; (void)nb;
+#endif
+}
+
 void CompanionMesh::MtSink::onNodeInfoRequest(uint8_t channel_id, uint32_t from)
 {
 	m.mtSendNodeInfoLimited(from, channel_id, false);
@@ -657,8 +677,6 @@ void CompanionMesh::MtSink::onDirectText(uint32_t from, uint32_t id, uint32_t re
 					 bool want_ack, const char *text, size_t len,
 					 int8_t snr_x4, uint8_t hops)
 {
-	(void)reply_id;
-
 	uint8_t key[PUB_KEY_SIZE];
 
 	if (!m.mtKeyFor(from, key)) {
@@ -691,6 +709,9 @@ void CompanionMesh::MtSink::onDirectText(uint32_t from, uint32_t id, uint32_t re
 	if (pkt) {
 		m.releasePacket(pkt);
 	}
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+	m.mtPhonePushText(mt::kNoChannel, from, m._mt.self(), id, reply_id, text, len, snr_x4, hops, 0);
+#endif
 	if (want_ack) {
 		m.mtSendAck(from, id);
 	}
@@ -757,7 +778,7 @@ const char *CompanionMesh::mtRecentName(uint32_t id) const
 }
 
 bool CompanionMesh::mtSendChannelText(int ch_idx, uint32_t timestamp, const char *text, size_t len,
-				      bool &sent)
+				      bool &sent, uint32_t reply_id)
 {
 	ChannelDetails ch;
 
@@ -772,6 +793,12 @@ bool CompanionMesh::mtSendChannelText(int ch_idx, uint32_t timestamp, const char
 	const char *body;
 	size_t body_len;
 	uint32_t reply = mtReplyTarget(text, len, &body, &body_len);
+
+	if (reply_id) {  /* the app's own reply: the text is not prefixed */
+		reply = reply_id;
+		body = text;
+		body_len = len;
+	}
 	size_t n = _mt.buildText((uint8_t)ch_idx, mt::kBroadcast, body, body_len, frame,
 				 sizeof(frame), reply);
 
@@ -782,6 +809,7 @@ bool CompanionMesh::mtSendChannelText(int ch_idx, uint32_t timestamp, const char
 
 		_mt_sent_next = (uint8_t)((_mt_sent_next + 1) % MT_SENT_KEEP);
 		s.id = h.id;
+		s.phone_id = 0;
 		s.timestamp = timestamp;
 		s.channel = (uint8_t)ch_idx;
 		s.n_relays = 0;
@@ -817,6 +845,11 @@ void CompanionMesh::mtEchoHeard(uint32_t id, uint8_t relay, float snr, float rss
 			return;
 		}
 		s.relays[s.n_relays++] = relay;
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+		if (s.phone_id && s.n_relays == 1) {  /* the first repeat is the ACK; the app drops the rest */
+			mtPhonePushAck(s.phone_id, _mt.self());
+		}
+#endif
 		uint8_t body[5 + MAX_TEXT_LEN + 32];
 
 		memcpy(body, &s.timestamp, 4);
@@ -1016,5 +1049,559 @@ void CompanionMesh::mtNodeInfoTick()
 
 	_mtport.tick((uint32_t)_ms->getMillis(), prefs.mt, (uint8_t)ch, none);
 }
+
+#if IS_ENABLED(CONFIG_ZEPHTACORE_MT_APP)
+
+/* ── Meshtastic phone app ─────────────────────────────────────────────── */
+
+/* What DeviceMetadata tells the app; the app compares it with the oldest
+ * firmware it supports. */
+static const char kMtPhoneFirmware[] = "2.7.0";
+
+/* Longest route the traceroute reply lists, each way. */
+static constexpr size_t kMtPhoneRoute = 7;
+
+/* A Meshtastic node: a node number and the "(MT)" name. Every other contact is MeshCore. */
+static bool mtPhoneIsNode(const ContactInfo &c)
+{
+	char base[32];
+
+	return c.sync_since != 0 && mtContactBase(c.name, base, sizeof(base));
+}
+
+static void mtPhoneShortName(uint32_t node, char out[5])
+{
+	snprintf(out, 5, "%04x", (unsigned)(node & 0xFFFF));
+}
+
+uint32_t CompanionMesh::mtPhoneNodeNum(const ContactInfo &c)
+{
+	return mtPhoneIsNode(c) ? c.sync_since : mt::mcNodeNum(c.id.pub_key);
+}
+
+bool CompanionMesh::mtPhoneContactOf(uint32_t node, ContactInfo &c)
+{
+	for (int i = 0; i < getNumContacts(); i++) {
+		if (getContactByIdx(i, c) && mtPhoneNodeNum(c) == node) {
+			return true;
+		}
+	}
+	return false;
+}
+
+uint32_t CompanionMesh::mtPhoneNextId()
+{
+	if (_mt_phone_msg_id == 0) {
+		_mt_phone_msg_id = mtRandom32() | 1;
+	}
+	return ++_mt_phone_msg_id;
+}
+
+/* The app's channel table: the Meshtastic channels first, then the MeshCore
+ * ones, in slot order, 8 at most. */
+int CompanionMesh::mtPhoneSlot(uint8_t app_index)
+{
+	int seen = 0;
+
+	for (int pass = 0; pass < 2; pass++) {
+		for (int i = 0; i < getNumChannels(); i++) {
+			ChannelDetails ch;
+
+			if (!getChannel(i, ch) || ch.name[0] == '\0' || (mtEntryOfSlot(i) != nullptr) != (pass == 0)) {
+				continue;
+			}
+			if (seen >= mt::kPhoneChannels) {
+				return -1;
+			}
+			if (seen++ == app_index) {
+				return i;
+			}
+		}
+	}
+	return -1;
+}
+
+int CompanionMesh::mtPhoneIndex(int slot)
+{
+	for (uint8_t i = 0; i < mt::kPhoneChannels; i++) {
+		if (mtPhoneSlot(i) == slot) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+void CompanionMesh::mtPhoneNodeOf(const ContactInfo &c, mt::PhoneNode &n)
+{
+	n = {};
+	n.num = mtPhoneNodeNum(c);
+	snprintf(n.user.id, sizeof(n.user.id), "!%08x", (unsigned)n.num);
+	if (mtPhoneIsNode(c)) {
+		mtContactBase(c.name, n.user.long_name, sizeof(n.user.long_name));
+		mtPhoneShortName(n.num, n.user.short_name);
+		/* The app offers private messages only for a node with a key. */
+		n.user.has_public_key = _store && _store->getMtKey(n.num, n.user.public_key);
+	} else {
+		/* Its own key: the app offers messages for it, and sends them to us as it would to any node. */
+		n.user.has_public_key = true;
+		memcpy(n.user.public_key, c.id.pub_key, sizeof(n.user.public_key));
+		snprintf(n.user.long_name, sizeof(n.user.long_name), "%s", c.name);
+		snprintf(n.user.short_name, sizeof(n.user.short_name), "MC%02x", (unsigned)(n.num & 0xFF));
+		n.user.role = c.type == ADV_TYPE_REPEATER ? 2 : 0;  /* ROUTER or CLIENT */
+		if (c.out_path_len != OUT_PATH_UNKNOWN) {
+			n.has_hops = true;
+			n.hops = c.out_path_len & 63;
+		}
+	}
+	n.last_heard = c.last_advert_timestamp;
+	if (c.gps_lat != 0 || c.gps_lon != 0) {
+		n.has_position = true;
+		n.position.has_lat = n.position.has_lon = true;
+		n.position.lat_i = c.gps_lat * 10;  /* 1e-6 to 1e-7 degrees */
+		n.position.lon_i = c.gps_lon * 10;
+	}
+}
+
+void CompanionMesh::mtPhonePushContact(const ContactInfo &c)
+{
+	mt::PhoneNode n;
+
+	mtPhoneNodeOf(c, n);
+	_mt_phone.pushNode(n);
+}
+
+void CompanionMesh::mtPhoneNoteContact(const ContactInfo &c)
+{
+	if (!mtPhoneIsNode(c)) {  /* the Meshtastic ones are pushed by mtUpsertContact */
+		mtPhonePushContact(c);
+	}
+}
+
+void CompanionMesh::mtPhonePushText(uint8_t slot, uint32_t from, uint32_t to, uint32_t id,
+				    uint32_t reply_id, const char *text, size_t len, int8_t snr_x4,
+				    uint8_t hops, uint8_t relay)
+{
+	mt::PhonePacket p = {};
+	int index = slot == mt::kNoChannel ? 0 : mtPhoneIndex(slot);
+
+	if (index < 0) {
+		return;
+	}
+	p.from = from;
+	p.to = slot == mt::kNoChannel ? to : mt::kBroadcast;
+	p.id = id;
+	p.channel = (uint32_t)index;
+	p.rx_time = (uint32_t)getRTCClock()->getCurrentTime();
+	p.rx_snr = (float)snr_x4 / 4.0f;
+	p.hop_start = hops;  /* hop_limit 0: the app reads the hops as the difference */
+	p.relay_node = relay;
+	p.has_decoded = true;
+	p.data.portnum = mt::PORT_TEXT;
+	p.data.payload = (const uint8_t *)text;
+	p.data.payload_len = len;
+	p.data.reply_id = reply_id;
+	_mt_phone.pushPacket(p);
+}
+
+/* A MeshCore channel text, "<sender>: <text>": the app gets the sender as the
+ * node it came from. A sender that is no contact becomes a node of its own. */
+void CompanionMesh::mtPhoneChannelMessage(int slot, mesh::Packet *pkt, const char *text)
+{
+	const char *sep = strstr(text, ": ");
+	char sender[32] = "";
+	const char *body = text;
+	int8_t snr_x4 = pkt ? (int8_t)(pkt->getSNR() * 4) : 0;
+	uint8_t hops = pkt && pkt->isRouteFlood() ? pkt->getPathHashCount() : 0;
+
+	if (slot < 0 || mtPhoneIndex(slot) < 0) {
+		return;
+	}
+	if (sep && (size_t)(sep - text) < sizeof(sender)) {
+		memcpy(sender, text, (size_t)(sep - text));
+		sender[sep - text] = '\0';
+		body = sep + 2;
+	}
+	ContactInfo c;
+	uint32_t from = 0;
+
+	for (int i = 0; i < getNumContacts() && from == 0; i++) {
+		if (getContactByIdx(i, c) && !mtPhoneIsNode(c) && strcmp(c.name, sender) == 0) {
+			from = mt::mcNodeNum(c.id.pub_key);
+		}
+	}
+	if (from == 0) {
+		mt::PhoneNode n = {};
+
+		from = mt::syntheticNode((const uint8_t *)sender, strlen(sender));
+		n.num = from;
+		snprintf(n.user.id, sizeof(n.user.id), "!%08x", (unsigned)from);
+		snprintf(n.user.long_name, sizeof(n.user.long_name), "%s", sender[0] ? sender : "MeshCore");
+		snprintf(n.user.short_name, sizeof(n.user.short_name), "MC%02x", (unsigned)(from & 0xFF));
+		_mt_phone.pushNode(n);
+	}
+	mtPhonePushText((uint8_t)slot, from, mt::kBroadcast, mtPhoneNextId(), 0, body, strlen(body), snr_x4,
+			hops, 0);
+}
+
+/* A MeshCore direct message; a Meshtastic one is pushed by its sink. */
+void CompanionMesh::mtPhoneDirectMessage(const ContactInfo &c, mesh::Packet *pkt, const char *text)
+{
+	if (mtPhoneIsNode(c)) {
+		return;
+	}
+	uint8_t hops = pkt && pkt->isRouteFlood() ? pkt->getPathHashCount() : 0;
+	int8_t snr_x4 = pkt ? (int8_t)(pkt->getSNR() * 4) : 0;
+
+	mtPhonePushText(mt::kNoChannel, mt::mcNodeNum(c.id.pub_key), _mt.self(), mtPhoneNextId(), 0, text,
+			strlen(text), snr_x4, hops, 0);
+}
+
+void CompanionMesh::mtPhonePushAck(uint32_t request_id, uint32_t from, uint8_t error)
+{
+	const uint8_t routing[] = {0x18, error};  /* Routing { error_reason } */
+	mt::PhonePacket p = {};
+
+	printk("MTDBG ack req=%08x from=%08x\n", (unsigned)request_id, (unsigned)from);
+	p.from = from;
+	p.to = _mt.self();
+	p.id = request_id ^ 0x80000000u;  /* the app drops a packet whose (from, id) it already has */
+	p.rx_time = (uint32_t)getRTCClock()->getCurrentTime();
+	p.has_decoded = true;
+	p.data.portnum = mt::PORT_ROUTING;
+	p.data.payload = routing;
+	p.data.payload_len = sizeof(routing);
+	p.data.request_id = request_id;
+	_mt_phone.pushPacket(p);
+}
+
+/* The ACK of a message the phone sent comes back to it with the id the app gave it. */
+void CompanionMesh::mtPhoneRememberDm(uint32_t ack, uint32_t phone_id, uint32_t node)
+{
+	MtPhonePending &old = _mt_phone_dm[_mt_phone_dm_next];
+
+	if (old.phone_id != 0) {  /* its ACK will not be tracked any more: tell the app it is lost */
+		mtPhonePushAck(old.phone_id, old.node, mt::ROUTING_MAX_RETRANSMIT);
+	}
+	old = {ack, phone_id, node};
+	_mt_phone_dm_next = (uint8_t)((_mt_phone_dm_next + 1) % MT_PHONE_PENDING);
+}
+
+void CompanionMesh::mtPhoneAcked(uint32_t ack)
+{
+	for (MtPhonePending &e : _mt_phone_dm) {
+		if (e.phone_id != 0 && e.ack == ack) {
+			mtPhonePushAck(e.phone_id, e.node);
+			e = {};
+		}
+	}
+}
+
+void CompanionMesh::mtPhoneToRadio(const uint8_t *frame, size_t len)
+{
+	_mt_phone.onToRadio(frame, len);
+	/* An ACK due for what was just sent goes after the queue status the session queued for it. */
+	if (_mt_phone_ack_id) {
+		mtPhonePushAck(_mt_phone_ack_id, _mt_phone_ack_from);
+		_mt_phone_ack_id = 0;
+	}
+}
+
+bool CompanionMesh::mtPhoneSendChannel(const mt::PhonePacket &p)
+{
+	const char *text = (const char *)p.data.payload;
+	const size_t len = p.data.payload_len;
+	const uint32_t ts = getRTCClock()->getCurrentTimeUnique();
+	int slot = mtPhoneSlot((uint8_t)p.channel);
+	ChannelDetails ch;
+	bool sent = false;
+
+	if (slot < 0 || !getChannel(slot, ch)) {
+		return false;
+	}
+	if (mtEntryOfSlot(slot)) {
+		if (!mtSendChannelText(slot, ts, text, len, sent, p.data.reply_id) || !sent) {
+			return false;
+		}
+		_mt_sent[(_mt_sent_next + MT_SENT_KEEP - 1) % MT_SENT_KEEP].phone_id = p.id;
+		return true;
+	}
+	if (!sendGroupMessage(ts, ch.channel, prefs.node_name, text, (int)len)) {
+		return false;
+	}
+	/* A MeshCore flood is not acknowledged: for the app, sending it is delivering it. */
+	_mt_phone_ack_id = p.id;
+	_mt_phone_ack_from = _mt.self();
+	return true;
+}
+
+bool CompanionMesh::mtPhoneSendDirect(const mt::PhonePacket &p)
+{
+	ContactInfo c;
+	bool sent = false;
+	uint32_t ack = 0;
+	const uint32_t ts = getRTCClock()->getCurrentTimeUnique();
+
+	if (!mtPhoneContactOf(p.to, c)) {
+		return false;
+	}
+	if (mtPhoneIsNode(c)) {
+		if (!mtSendDirectText(c, (const char *)p.data.payload, p.data.payload_len, sent, ack)) {
+			return false;
+		}
+		if (!sent) {  /* no key for the node: ask for its NodeInfo, the next try can be sealed */
+			mtSendNodeInfoLimited(p.to, mt::kNoChannel, true);
+			return false;
+		}
+		mtPhoneRememberDm(ack, p.id, p.to);
+		return true;
+	}
+	char text[MAX_TEXT_LEN + 1];
+	uint32_t timeout;
+	size_t len = p.data.payload_len < MAX_TEXT_LEN ? p.data.payload_len : MAX_TEXT_LEN;
+
+	memcpy(text, p.data.payload, len);
+	text[len] = '\0';
+	if (sendMessage(c, ts, 0, text, ack, timeout) == MSG_SEND_FAILED) {
+		return false;
+	}
+	if (ack) {
+		addPendingAck(ack, mtContactIndex(c));
+		mtPhoneRememberDm(ack, p.id, p.to);
+	}
+	return true;
+}
+
+/* A Meshtastic node's traceroute: sent on a channel, answered with the route it took. */
+bool CompanionMesh::mtPhoneTraceNode(const ContactInfo &c, const mt::PhonePacket &p)
+{
+	uint32_t node;
+	uint8_t frame[mt::kMaxTxFrame];
+	mt::Header h;
+	int slot = mtPhoneSlot((uint8_t)p.channel);
+
+	if (!mtNodeOf(c, node)) {
+		return false;
+	}
+	if (slot < 0 || !mtEntryOfSlot(slot)) {  /* not a Meshtastic channel: use the first that is */
+		slot = -1;
+		for (int i = 0; i < getNumChannels() && slot < 0; i++) {
+			slot = mtEntryOfSlot(i) ? i : -1;
+		}
+	}
+	if (slot < 0) {
+		return false;
+	}
+	if (!_mt_ready) {
+		mtSetup();
+	}
+	size_t n = _mt.buildTraceroute((uint8_t)slot, node, frame, sizeof(frame));
+
+	if (n == 0 || !mt::parseHeader(frame, n, h) || !_mtport.send(frame, n)) {
+		return false;
+	}
+	_mt_phone_trace_tag = h.id;  /* the answer's request_id */
+	_mt_phone_trace_id = p.id;
+	_mt_phone_trace_node = node;
+	return true;
+}
+
+void CompanionMesh::mtPhoneTraceDone(uint32_t from, uint32_t request_id, const uint32_t *route, size_t n,
+				     const uint32_t *back, size_t nb)
+{
+	printk("MTDBG trace in from=%08x req=%08x n=%u/%u\n", (unsigned)from, (unsigned)request_id, (unsigned)n, (unsigned)nb);
+	if (_mt_phone_trace_tag == 0 || request_id != _mt_phone_trace_tag || from != _mt_phone_trace_node) {
+		return;
+	}
+	_mt_phone_trace_tag = 0;
+	mtPhonePushRoute(route, n, back, nb);
+}
+
+/* The app asking a node for its user info: our NodeInfo goes to it, asking for its own back,
+ * which brings the key a private message needs. A MeshCore contact has nothing to exchange. */
+bool CompanionMesh::mtPhoneRequestUserInfo(const mt::PhonePacket &p)
+{
+	ContactInfo c;
+	uint32_t node;
+
+	if (p.to == mt::kBroadcast || !mtPhoneContactOf(p.to, c)) {
+		return false;
+	}
+	if (mtNodeOf(c, node)) {
+		mtSendNodeInfoLimited(node, mt::kNoChannel, true);
+	}
+	return true;
+}
+
+/* Traceroute to a MeshCore contact is a path discovery: a flooded request whose
+ * answer carries the path each way. */
+bool CompanionMesh::mtPhoneTraceroute(const mt::PhonePacket &p)
+{
+	ContactInfo c;
+
+	if (!mtPhoneContactOf(p.to, c)) {
+		return false;
+	}
+	if (mtPhoneIsNode(c)) {
+		return mtPhoneTraceNode(c, p);
+	}
+	ContactInfo *contact = lookupContactByPubKey(c.id.pub_key, PUB_KEY_SIZE);
+
+	if (!contact) {
+		return false;
+	}
+	uint32_t tag, timeout;
+	int result = sendPathDiscovery(*contact, tag, timeout);
+
+	printk("MTDBG mc trace to %s type=%u result=%d tag=%08x\n", c.name, (unsigned)c.type, result, (unsigned)tag);
+	if (result == MSG_SEND_FAILED) {
+		return false;
+	}
+	_mt_phone_trace_tag = tag;
+	_mt_phone_trace_id = p.id;
+	_mt_phone_trace_node = p.to;
+	return true;
+}
+
+/* The node a path hash stands for: the contact whose key starts with it. */
+uint32_t CompanionMesh::mtPhoneNodeOfHash(const uint8_t *hash, uint8_t size)
+{
+	ContactInfo c;
+
+	for (int i = 0; i < getNumContacts(); i++) {
+		if (getContactByIdx(i, c) && c.type == ADV_TYPE_REPEATER && memcmp(c.id.pub_key, hash, size) == 0) {
+			return mt::mcNodeNum(c.id.pub_key);
+		}
+	}
+	return mt::syntheticNode(hash, size);
+}
+
+/* The answer to the request mtPhoneTraceroute sent. True when it was that one. */
+bool CompanionMesh::mtPhonePathDiscovered(uint32_t tag, uint8_t *in_path, uint8_t in_len,
+					  uint8_t *out_path, uint8_t out_len)
+{
+	if (_mt_phone_trace_tag == 0 || tag != _mt_phone_trace_tag) {
+		return false;
+	}
+	_mt_phone_trace_tag = 0;
+	if (!mesh::Packet::isValidPathLen(in_len) || !mesh::Packet::isValidPathLen(out_len)) {
+		return true;
+	}
+	uint32_t route[kMtPhoneRoute], back[kMtPhoneRoute];
+	size_t n = 0, nb = 0;
+	const uint8_t out_size = (out_len >> 6) + 1, in_size = (in_len >> 6) + 1;
+
+	for (uint8_t i = 0; i < (out_len & 63) && n < kMtPhoneRoute; i++) {
+		route[n++] = mtPhoneNodeOfHash(&out_path[i * out_size], out_size);
+	}
+	for (uint8_t i = 0; i < (in_len & 63) && nb < kMtPhoneRoute; i++) {
+		back[nb++] = mtPhoneNodeOfHash(&in_path[i * in_size], in_size);
+	}
+	mtPhonePushRoute(route, n, back, nb);
+	return true;
+}
+
+void CompanionMesh::mtPhonePushRoute(const uint32_t *route, size_t n, const uint32_t *back, size_t nb)
+{
+	uint8_t payload[2 * kMtPhoneRoute * 14 + 32];
+	mt::PhonePacket p = {};
+
+	p.from = _mt_phone_trace_node;
+	p.to = _mt.self();
+	p.id = mtPhoneNextId();
+	p.rx_time = (uint32_t)getRTCClock()->getCurrentTime();
+	p.hop_start = 1;  /* the app reads the way back only from a packet with hop_start set */
+	p.has_decoded = true;
+	p.data.portnum = mt::PORT_TRACEROUTE;
+	p.data.payload = payload;
+	p.data.payload_len = mt::encodeRouteDiscovery(route, n, back, nb, payload, sizeof(payload));
+	p.data.request_id = _mt_phone_trace_id;
+	printk("MTDBG trace reply req=%08x hops=%u/%u\n", (unsigned)_mt_phone_trace_id, (unsigned)n, (unsigned)nb);
+	_mt_phone.pushPacket(p);
+}
+
+uint32_t CompanionMesh::MtPhoneHost::selfNode()
+{
+	return m._mt.self();
+}
+
+mt::PhoneMetadata CompanionMesh::MtPhoneHost::metadata()
+{
+	mt::PhoneMetadata md = {};
+
+	md.firmware_version = kMtPhoneFirmware;
+	md.has_bluetooth = true;
+	md.has_pkc = true;
+	return md;
+}
+
+bool CompanionMesh::MtPhoneHost::channelAt(uint8_t index, mt::PhoneChannel &ch)
+{
+	int slot = m.mtPhoneSlot(index);
+	ChannelDetails details;
+
+	if (slot < 0 || !m.getChannel(slot, details)) {
+		return false;
+	}
+	ch.used = true;
+	ch.role = index == 0 ? mt::CHANNEL_PRIMARY : mt::CHANNEL_SECONDARY;
+	const mt::ChannelEntry *e = m.mtEntryOfSlot(slot);
+
+	if (e) {
+		snprintf(ch.name, sizeof(ch.name), "%s", e->name);
+		memcpy(ch.psk, e->psk, e->psk_len);
+		ch.psk_len = e->psk_len;
+	} else {  /* a MeshCore channel: its name behind "MC:", its secret as the key */
+		snprintf(ch.name, sizeof(ch.name), "MC:%.8s", details.name);
+		memcpy(ch.psk, details.channel.secret, sizeof(ch.psk));
+		ch.psk_len = sizeof(ch.psk);
+	}
+	return true;
+}
+
+/* Ourselves, then every contact: the Meshtastic ones and the MeshCore ones. */
+uint32_t CompanionMesh::MtPhoneHost::nodeCount()
+{
+	return 1 + (uint32_t)m.getNumContacts();
+}
+
+bool CompanionMesh::MtPhoneHost::nodeAt(uint32_t index, mt::PhoneNode &n)
+{
+	if (index == 0) {
+		n = {};
+		n.num = m._mt.self();
+		snprintf(n.user.id, sizeof(n.user.id), "!%08x", (unsigned)n.num);
+		snprintf(n.user.long_name, sizeof(n.user.long_name), "%s", m.prefs.node_name);
+		mtPhoneShortName(n.num, n.user.short_name);
+		return true;
+	}
+	ContactInfo c;
+
+	if (!m.getContactByIdx(index - 1, c)) {
+		return false;
+	}
+	m.mtPhoneNodeOf(c, n);
+	return true;
+}
+
+bool CompanionMesh::MtPhoneHost::sendFromPhone(const mt::PhonePacket &p)
+{
+	printk("MTDBG send id=%08x to=%08x ch=%u dec=%d port=%u len=%u\n", (unsigned)p.id, (unsigned)p.to,
+	       (unsigned)p.channel, p.has_decoded, (unsigned)p.data.portnum, (unsigned)p.data.payload_len);
+	if (!p.has_decoded || p.data.emoji) {  /* a reaction has no MeshCore form */
+		return false;
+	}
+	if (p.data.portnum == mt::PORT_TRACEROUTE) {
+		return m.mtPhoneTraceroute(p);
+	}
+	if (p.data.portnum == mt::PORT_NODEINFO) {
+		return m.mtPhoneRequestUserInfo(p);
+	}
+	if (p.data.portnum != mt::PORT_TEXT) {
+		return false;  /* nothing else is bridged */
+	}
+	return p.to == mt::kBroadcast ? m.mtPhoneSendChannel(p) : m.mtPhoneSendDirect(p);
+}
+
+#endif /* CONFIG_ZEPHTACORE_MT_APP */
 
 #endif /* CONFIG_ZEPHTACORE_MESHTASTIC */

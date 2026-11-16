@@ -25,8 +25,13 @@ LOG_MODULE_DECLARE(zephcore_ble, CONFIG_ZEPHCORE_BLE_LOG_LEVEL);
 
 /* Bump when static BT_GATT_SERVICE_DEFINE layout or registration order changes.
  * 1 = pre-2cf4b97 (dfu_svc before secure_nus_svc)
- * 2 = secure_nus_svc_dfu after secure_nus_svc (+ packet/revision chars) */
+ * 2 = secure_nus_svc_dfu after secure_nus_svc (+ packet/revision chars)
+ * 3 = secure_nus_svc_mt after both (CONFIG_ZEPHTACORE_MT_APP) */
+#ifdef CONFIG_ZEPHTACORE_MT_APP
+#define ZEPHCORE_GATT_LAYOUT_VERSION 3
+#else
 #define ZEPHCORE_GATT_LAYOUT_VERSION 2
+#endif
 
 /* Delay before sending Service Changed after L2 security is established.
  * On a fresh pairing, pairing_complete() fires within this window and marks the
