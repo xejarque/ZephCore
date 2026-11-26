@@ -24,3 +24,4 @@ restructure; most describe decisions taken earlier. The system view is in [../DE
 | [0018](0018-lora-headers-without-a-valid-crc.md) | A LoRa header whose CRC fails is not received; the check lives in the SX126x, LR1110 and LR2021 drivers, not in SX127x |
 | [0019](0019-recontention-after-a-busy-channel.md) | A packet held by a busy channel draws its wait again; MeshCore and Meshtastic keep their own windows |
 | [0020](0020-fork-version-scheme.md) | Fork version scheme (`<upstream-base>-ztc.<n>`, starting at `1.18.2-ztc.1`) within the 20-byte `PACKET_DEVICE_INFO` wire field |
+| [0021](0021-rescue-copy-in-settings-nvs.md) | Zephtacore: a repeater or room server keeps a copy of its identity, `prefs.json` and regions in the settings NVS and restores it when a file is lost |
