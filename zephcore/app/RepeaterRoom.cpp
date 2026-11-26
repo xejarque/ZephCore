@@ -477,7 +477,7 @@ void RepeaterMesh::onSecondaryAnonDataRecv(mesh::Packet *packet, const uint8_t *
 		}
 		memcpy(client->shared_secret, secret, PUB_KEY_SIZE);
 
-		const bool persist = client->isAdmin() || (room_pw_match && perms == PERM_ACL_READ_WRITE);
+		const bool persist = (perms != PERM_ACL_GUEST);
 		if (persist && (client->permissions != prev_perms ||
 				client->extra.room.sync_since != prev_sync_since ||
 				secret_changed)) {
