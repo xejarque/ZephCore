@@ -600,6 +600,10 @@ if(CONFIG_ZEPHCORE_ROLE_REPEATER OR CONFIG_ZEPHCORE_ROLE_ROOM_SERVER)
     helpers/CommonCLI.cpp
     helpers/cli_parse.cpp
   )
+  # Zephtacore: the rescue copy of identity, preferences and regions.
+  if(CONFIG_ZEPHTACORE_RESCUE_COPY)
+    target_sources(app PRIVATE adapters/datastore/RescueCopy.cpp)
+  endif()
   # Low-battery auto-shutdown, where the board wakes itself again.
   if(CONFIG_ZEPHCORE_BATTERY_WAKE)
     target_sources(app PRIVATE app/PowerPolicy.cpp)

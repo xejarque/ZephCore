@@ -308,6 +308,14 @@ config ZEPHCORE_MAX_UNSYNCED_POSTS
 	  Size of the room server's circular post buffer.  When full, the
 	  oldest unsynced post is overwritten.  Matches upstream MeshCore (32).
 
+config ZEPHTACORE_RESCUE_COPY
+	def_bool y
+	depends on SETTINGS_NVS
+	help
+	  Zephtacore: a repeater or room server keeps a copy of its identity,
+	  preferences and regions in the settings NVS and puts back a file that
+	  is lost (ADR 0021).
+
 endif # ZEPHCORE_ROLE_REPEATER || ZEPHCORE_ROLE_ROOM_SERVER
 
 config ZEPHCORE_TIMESYNC_QUORUM

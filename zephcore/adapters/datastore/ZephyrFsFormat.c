@@ -125,6 +125,13 @@ bool zephcore_fs_mount_ext(void)
 #endif
 }
 
+void zephcore_fs_erase_settings(void)
+{
+#if PARTITION_EXISTS(storage_partition)
+	flatten(PARTITION_ID(storage_partition), "storage_partition");
+#endif
+}
+
 bool zephcore_fs_format_all(bool *out_ext_mounted)
 {
 	LOG_INF("zephcore_fs_format_all: starting...");
@@ -147,11 +154,9 @@ bool zephcore_fs_format_all(bool *out_ext_mounted)
 	flatten(PARTITION_ID(lfs_partition), "lfs_partition");
 #endif
 
-#if PARTITION_EXISTS(storage_partition)
-	/* BLE bonds (NVS).  A factory reset should clear them too; the caller
-	 * reboots so NVS and the BT stack re-init clean. */
-	flatten(PARTITION_ID(storage_partition), "storage_partition");
-#endif
+	/* BLE bonds or the rescue copy (NVS).  A factory reset should clear them
+	 * too; the caller reboots so NVS and the BT stack re-init clean. */
+	zephcore_fs_erase_settings();
 
 #if PARTITION_EXISTS(qspi_storage_partition)
 	/* A repeater never mounts /ext, so its flash is still uninitialised. */

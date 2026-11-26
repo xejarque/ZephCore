@@ -30,6 +30,12 @@ extern "C" {
 bool zephcore_fs_format_all(bool *out_ext_mounted);
 
 /**
+ * @brief Erase the settings NVS alone (storage_partition); a no-op where the
+ * board has none.
+ */
+void zephcore_fs_erase_settings(void);
+
+/**
  * @brief Mount /ext (QSPI) on first use, initialising its deferred flash.
  *
  * Idempotent. The flash is zephyr,deferred-init (qspi-ext.dtsi) and /ext is

@@ -53,7 +53,7 @@ antes.
 Una unidad revisable por tarea, con commit propio en rama de trabajo desde `fork/master`.
 
 - [x] **T1.** `RescuePolicy.h` y sus tests (`tests/unit/rescue_tests.cpp`, `tests/catalog.json`).
-- [ ] **T2.** Almacén NVS y capacidad Kconfig.
+- [x] **T2.** Almacén NVS y capacidad Kconfig.
 - [ ] **T3.** Secuencia de arranque, conservación al formatear y desarmado tras `erase`.
 - [ ] **T4.** Escritura tras comando y `get z.rescue`.
 - [ ] **T5.** Documentación y notas de versión.
