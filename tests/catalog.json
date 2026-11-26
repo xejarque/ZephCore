@@ -648,6 +648,11 @@
       "source": "tests/unit/timesync_tests.cpp"
     },
     {
+      "id": "UNIT-SYNC-015",
+      "name": "A clock step moves set stamps, keeps 0 unset and never yields 0",
+      "source": "tests/unit/timesync_tests.cpp"
+    },
+    {
       "id": "UNIT-TIME-001",
       "name": "Maintenance deadlines across uint32 wrap",
       "source": "tests/unit/policy_tests.cpp"
@@ -1736,6 +1741,36 @@
       "id": "UNIT-CLIREPLY-004",
       "name": "A header larger than the buffer yields 0, never an underflow",
       "source": "tests/unit/cli_reply_tests.cpp"
+    },
+    {
+      "id": "UNIT-PJSON-018",
+      "name": "Virtual room prefs survive server prefs.json; a file without z_room keeps defaults",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-VROOM-001",
+      "name": "Derived room advert names reflect access mode, respect 31-byte cap, and never split UTF-8",
+      "source": "tests/unit/vroom_tests.cpp"
+    },
+    {
+      "id": "UNIT-VROOM-002",
+      "name": "Access modes, login permission resolution, post gating, and secondary hash checks enforce room policy",
+      "source": "tests/unit/vroom_tests.cpp"
+    },
+    {
+      "id": "UNIT-VROOM-003",
+      "name": "Secondary identity skips self-adverts, agrees on ECDH, and forwards floods on primary self_id",
+      "source": "tests/unit/vroom_tests.cpp"
+    },
+    {
+      "id": "UNIT-VROOM-004",
+      "name": "z.room.* keys appear in the z. help tree only when vroom=true and fit remote replies",
+      "source": "tests/unit/vroom_tests.cpp"
+    },
+    {
+      "id": "UNIT-VROOM-005",
+      "name": "A blank-password re-login lifts a guest to read-write only in an open room",
+      "source": "tests/unit/vroom_tests.cpp"
     }
   ]
 }

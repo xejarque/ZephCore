@@ -20,11 +20,15 @@ const cfg = {
 };
 
 test("repeater and companion commands follow docs/CLI_commands.md", () => {
-  assert.deepEqual(L.buildConfigCommands({ ...cfg, role: "repeater" }), [
+  assert.deepEqual(L.buildConfigCommands({ ...cfg, role: "repeater" }, 1700000000), [
     "set name Node", "password pw", "set radio 869.618,62.5,7,6", "set tx 22",
     "set z.mt.enable on", "set z.mt.relay essential", "set z.mt.relay.opaque on", "set z.mt.hops 7",
-    "reboot"
+    "time 1700000000", "reboot"
   ]);
+  const defaultTimeCmds = L.buildConfigCommands({ ...cfg, role: "companion" });
+  const timeIdx = defaultTimeCmds.findIndex((c) => /^time \d{10,}$/.test(c));
+  assert.ok(timeIdx >= 0 && timeIdx === defaultTimeCmds.length - 2);
+  assert.equal(defaultTimeCmds.at(-1), "reboot");
 });
 
 test("no password is sent when none is set; ping bot carries its command; position only when set", () => {
@@ -40,6 +44,26 @@ test("observer gets its own commands: no password, tx or z.mt", () => {
   assert.deepEqual(L.buildConfigCommands({ ...cfg, role: "observer" }), [
     "set name Node", "set freq 869.618", "set sf 7", "set bw 62.5", "set cr 6", "reboot"
   ]);
+});
+
+test("repeater virtual room emits access, optional password, and room.on before reboot", () => {
+  const openCmds = L.buildConfigCommands({ ...cfg, role: "repeater", vroomEnable: true, vroomAccess: "open", vroomPass: "" });
+  assert.ok(openCmds.includes("set z.room.access open"));
+  assert.ok(openCmds.includes("set z.room.on on"));
+  assert.ok(!openCmds.some((c) => c.startsWith("set z.room.password")));
+  assert.ok(openCmds.indexOf("set z.room.access open") < openCmds.indexOf("set z.room.on on"));
+  assert.equal(openCmds.at(-1), "reboot");
+
+  const privCmds = L.buildConfigCommands({ ...cfg, role: "repeater", vroomEnable: true, vroomAccess: "private", vroomPass: "sala123" });
+  assert.ok(privCmds.indexOf("set z.room.access private") < privCmds.indexOf("set z.room.password sala123"));
+  assert.ok(privCmds.indexOf("set z.room.password sala123") < privCmds.indexOf("set z.room.on on"));
+  assert.equal(privCmds.at(-1), "reboot");
+
+  const offCmds = L.buildConfigCommands({ ...cfg, role: "repeater", vroomEnable: false, vroomAccess: "private", vroomPass: "sala123" });
+  assert.ok(!offCmds.some((c) => c.startsWith("set z.room.")));
+
+  const compCmds = L.buildConfigCommands({ ...cfg, role: "companion", vroomEnable: true, vroomAccess: "open" });
+  assert.ok(!compCmds.some((c) => c.startsWith("set z.room.")));
 });
 
 test("catalogFiles takes only the newest version of each firmware", () => {

@@ -68,11 +68,12 @@ struct ClientInfo {
 
 class ClientACL {
   FILESYSTEM* _fs;
+  const char* _filename;  // ZEPHCORE: configurable ACL filename (e.g. /room_acl)
   ClientInfo clients[MAX_CLIENTS];
   int num_clients;
 
 public:
-  ClientACL() {
+  explicit ClientACL(const char* filename = "/acl") : _fs(nullptr), _filename(filename) {  // ZEPHCORE
     for (int i = 0; i < MAX_CLIENTS; i++) clients[i].clear();  // ZEPHCORE: was memset
     num_clients = 0;
   }

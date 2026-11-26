@@ -572,8 +572,14 @@ void RoomServerMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int send
         send_ack = false;  // CLI replies are sent as text, not ACKed
       } else {  // TXT_TYPE_PLAIN -> a post
         if ((client->permissions & PERM_ACL_ROLE_MASK) == PERM_ACL_GUEST) {
-          temp[5] = 0;       // read-only guests can't post
-          send_ack = false;
+          // ZEPHCORE: ACK and say why, so the app stops retrying (was: no reply, no ACK).
+          if (is_retry) {
+            temp[5] = 0;
+          } else {
+            StrHelper::strncpy((char*)&temp[5], "Error: room is read-only", CLI_REMOTE_REPLY_SIZE);
+            temp[4] = (TXT_TYPE_PLAIN << 2);
+          }
+          send_ack = true;
         } else {
           if (!is_retry) addPost(client, (const char*)&data[5]);
           temp[5] = 0;       // the ACK is the only reply
@@ -1224,8 +1230,14 @@ void RoomServerMesh::timeSyncTick() {
   /* Step applied (forward-only enforced in runTick) — shift wall-clock-
    * anchored bookkeeping with it. */
   int64_t delta = _timesync.lastStepDelta();
+  // ZEPHCORE: posts and sync cursors are RTC seconds too.
+  for (int k = 0; k < MAX_UNSYNCED_POSTS; k++) {
+    posts[k].post_timestamp = shiftWallStamp(posts[k].post_timestamp, delta);
+  }
   for (int i = 0; i < acl.getNumClients(); i++) {
     ClientInfo* c = acl.getClientByIdx(i);
+    c->extra.room.sync_since = shiftWallStamp(c->extra.room.sync_since, delta);
+    c->extra.room.push_post_timestamp = shiftWallStamp(c->extra.room.push_post_timestamp, delta);
     if (c->last_activity == 0) continue;
     int64_t shifted = (int64_t)c->last_activity + delta;
     c->last_activity = (shifted > 0) ? (uint32_t)shifted : 1;

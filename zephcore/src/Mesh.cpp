@@ -264,6 +264,7 @@ DispatcherAction Mesh::onRecvPacket(Packet* pkt) {
         //       For flood mode, the path may not be the 'best' in terms of hops.
         // FUTURE: could send back multiple paths, using createPathReturn(), and let sender choose which to use(?)
 
+        bool handled = false;  // ZEPHCORE: track primary match for secondary fallback
         if (self_id.isHashMatch(&dest_hash)) {
           // scan contacts DB, for all matching hashes of 'src_hash' (max 4 matches supported ATM)
           int num = searchPeersByHash(&src_hash);
@@ -310,8 +311,55 @@ DispatcherAction Mesh::onRecvPacket(Packet* pkt) {
           }
           if (found) {
             pkt->markDoNotRetransmit();  // packet was for this node, so don't retransmit
+            handled = true;  // ZEPHCORE
           } else {
             MESH_DEBUG_PRINTLN("%s recv matches no peers, src_hash=%02X", getLogDateTime(), (uint32_t)src_hash);
+          }
+        }
+        // ZEPHCORE: secondary virtual identity dispatch (no forwarding impact).
+        const LocalIdentity* sec = getSecondaryIdentity();
+        if (!handled && sec && sec->isHashMatch(&dest_hash)) {
+          int num = searchSecondaryPeersByHash(&src_hash);
+          bool found = false;
+          for (int j = 0; j < num; j++) {
+            uint8_t secret[PUB_KEY_SIZE];
+            getSecondaryPeerSharedSecret(secret, j);
+
+            uint8_t data[MAX_PACKET_PAYLOAD];
+            int len = Utils::MACThenDecrypt(secret, data, macAndData, pkt->payload_len - i);
+            if (len > 0) {
+              if (pkt->getPayloadType() == PAYLOAD_TYPE_PATH) {
+                int k = 0;
+                uint8_t path_len = data[k++];
+                if (!Packet::isValidPathLen(path_len)) {
+                  MESH_DEBUG_PRINTLN("%s PAYLOAD_TYPE_PATH, bad path_len: %u", getLogDateTime(), (uint32_t)path_len);
+                  break;
+                }
+                uint8_t hash_size = (path_len >> 6) + 1;
+                uint8_t hash_count = path_len & 63;
+                if (k + hash_size*hash_count + 1 > len) {
+                  MESH_DEBUG_PRINTLN("%s PAYLOAD_TYPE_PATH, truncated path", getLogDateTime());
+                  break;
+                }
+                uint8_t* path = &data[k]; k += hash_size*hash_count;
+                uint8_t extra_type = data[k++] & 0x0F;
+                uint8_t* extra = &data[k];
+                uint8_t extra_len = len - k;
+                if (onSecondaryPeerPathRecv(pkt, j, secret, path, path_len, extra_type, extra, extra_len)) {
+                  if (pkt->isRouteFlood()) {
+                    mesh::Packet* rpath = createPathReturnFrom(*sec, &src_hash, secret, pkt->path, pkt->path_len, 0, NULL, 0);
+                    if (rpath) sendDirect(rpath, path, path_len, 500);
+                  }
+                }
+              } else {
+                onSecondaryPeerDataRecv(pkt, pkt->getPayloadType(), j, secret, data, len);
+              }
+              found = true;
+              break;
+            }
+          }
+          if (found) {
+            pkt->markDoNotRetransmit();
           }
         }
         action = routeRecvPacket(pkt);
@@ -328,6 +376,7 @@ DispatcherAction Mesh::onRecvPacket(Packet* pkt) {
         MESH_DEBUG_PRINTLN("%s Mesh::onRecvPacket(): incomplete data packet", getLogDateTime());
       } else if (!_tables->wasSeen(pkt)) {
         _tables->markSeen(pkt);
+        bool handled = false;  // ZEPHCORE
         if (self_id.isHashMatch(&dest_hash)) {
           Identity sender(sender_pub_key);
 
@@ -339,6 +388,22 @@ DispatcherAction Mesh::onRecvPacket(Packet* pkt) {
           int len = Utils::MACThenDecrypt(secret, data, macAndData, pkt->payload_len - i);
           if (len > 0) {  // success!
             onAnonDataRecv(pkt, secret, sender, data, len);
+            pkt->markDoNotRetransmit();
+            handled = true;  // ZEPHCORE
+          }
+        }
+        // ZEPHCORE: secondary virtual identity anonymous request.
+        const LocalIdentity* sec = getSecondaryIdentity();
+        if (!handled && sec && sec->isHashMatch(&dest_hash)) {
+          Identity sender(sender_pub_key);
+
+          uint8_t secret[PUB_KEY_SIZE];
+          sec->calcSharedSecret(secret, sender);
+
+          uint8_t data[MAX_PACKET_PAYLOAD];
+          int len = Utils::MACThenDecrypt(secret, data, macAndData, pkt->payload_len - i);
+          if (len > 0) {
+            onSecondaryAnonDataRecv(pkt, secret, sender, data, len);
             pkt->markDoNotRetransmit();
           }
         }
@@ -384,7 +449,8 @@ DispatcherAction Mesh::onRecvPacket(Packet* pkt) {
 
       if (i > pkt->payload_len) {
         MESH_DEBUG_PRINTLN("%s Mesh::onRecvPacket(): incomplete advertisement packet", getLogDateTime());
-      } else if (self_id.matches(id.pub_key)) {
+      } else if (self_id.matches(id.pub_key) ||
+                 (getSecondaryIdentity() && getSecondaryIdentity()->matches(id.pub_key))) {  // ZEPHCORE: skip secondary self advert
         MESH_DEBUG_PRINTLN("%s Mesh::onRecvPacket(): receiving SELF advert packet", getLogDateTime());
       } else if (!_tables->wasSeen(pkt)) {
         _tables->markSeen(pkt);
@@ -573,12 +639,21 @@ Packet* Mesh::createAdvert(const LocalIdentity& id, const uint8_t* app_data, siz
 #define MAX_COMBINED_PATH  (MAX_PACKET_PAYLOAD - 2 - CIPHER_BLOCK_SIZE)
 
 Packet* Mesh::createPathReturn(const Identity& dest, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len) {
-  uint8_t dest_hash[PATH_HASH_SIZE];
-  dest.copyHashTo(dest_hash);
-  return createPathReturn(dest_hash, secret, path, path_len, extra_type, extra, extra_len);
+  return createPathReturnFrom(self_id, dest, secret, path, path_len, extra_type, extra, extra_len);  // ZEPHCORE
 }
 
 Packet* Mesh::createPathReturn(const uint8_t* dest_hash, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len) {
+  return createPathReturnFrom(self_id, dest_hash, secret, path, path_len, extra_type, extra, extra_len);  // ZEPHCORE
+}
+
+// ZEPHCORE: source-identity variants for secondary virtual identities.
+Packet* Mesh::createPathReturnFrom(const LocalIdentity& from, const Identity& dest, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len) {
+  uint8_t dest_hash[PATH_HASH_SIZE];
+  dest.copyHashTo(dest_hash);
+  return createPathReturnFrom(from, dest_hash, secret, path, path_len, extra_type, extra, extra_len);  // ZEPHCORE: was createPathReturn
+}
+
+Packet* Mesh::createPathReturnFrom(const LocalIdentity& from, const uint8_t* dest_hash, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len) {  // ZEPHCORE: was createPathReturn
   uint8_t path_hash_size = (path_len >> 6) + 1;
   uint8_t path_hash_count = path_len & 63;
 
@@ -593,7 +668,7 @@ Packet* Mesh::createPathReturn(const uint8_t* dest_hash, const uint8_t* secret, 
 
   int len = 0;
   memcpy(&packet->payload[len], dest_hash, PATH_HASH_SIZE); len += PATH_HASH_SIZE;  // dest hash
-  len += self_id.copyHashTo(&packet->payload[len]);  // src hash
+  len += from.copyHashTo(&packet->payload[len]);  // src hash  // ZEPHCORE: was self_id
 
   {
     int data_len = 0;
@@ -619,6 +694,11 @@ Packet* Mesh::createPathReturn(const uint8_t* dest_hash, const uint8_t* secret, 
 }
 
 Packet* Mesh::createDatagram(uint8_t type, const Identity& dest, const uint8_t* secret, const uint8_t* data, size_t data_len) {
+  return createDatagramFrom(self_id, type, dest, secret, data, data_len);  // ZEPHCORE
+}
+
+// ZEPHCORE: source-identity variant for secondary virtual identities.
+Packet* Mesh::createDatagramFrom(const LocalIdentity& from, uint8_t type, const Identity& dest, const uint8_t* secret, const uint8_t* data, size_t data_len) {
   if (type == PAYLOAD_TYPE_TXT_MSG || type == PAYLOAD_TYPE_REQ || type == PAYLOAD_TYPE_RESPONSE) {
     if (data_len + CIPHER_MAC_SIZE + CIPHER_BLOCK_SIZE-1 > MAX_PACKET_PAYLOAD) return NULL;
   } else {
@@ -634,7 +714,7 @@ Packet* Mesh::createDatagram(uint8_t type, const Identity& dest, const uint8_t* 
 
   int len = 0;
   len += dest.copyHashTo(&packet->payload[len]);  // dest hash
-  len += self_id.copyHashTo(&packet->payload[len]);  // src hash
+  len += from.copyHashTo(&packet->payload[len]);  // src hash  // ZEPHCORE: was self_id
   len += Utils::encryptThenMAC(secret, &packet->payload[len], data, data_len);
 
   packet->payload_len = len;

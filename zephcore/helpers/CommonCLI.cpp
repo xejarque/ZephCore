@@ -465,6 +465,12 @@ bool CommonCLI::handleZCmd(uint32_t sender_timestamp, const char* command, char*
 		_callbacks->formatRescueReply(reply, replyCap(sender_timestamp));
 		return true;
 	}
+	if (strncmp(command, "get z.room.", 11) == 0 || strncmp(command, "set z.room.", 11) == 0) {
+		if (!_callbacks->handleVRoomCommand(sender_timestamp, command, reply)) {
+			snprintf(reply, replyCap(sender_timestamp), "Error: not available in this role");
+		}
+		return true;
+	}
 	if (ping::isCommand(command)) {
 		ping::Stats* stats = _callbacks->pingStats();
 #if !IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC)
@@ -523,11 +529,14 @@ bool CommonCLI::handleZCmd(uint32_t sender_timestamp, const char* command, char*
 
 void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, char* reply) {
 	_save_failed = false;
-	if (zcmd::helpReply(command, IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC), reply, replyCap(sender_timestamp))) {
+	if (zcmd::helpReply(command, IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC), reply,
+			   replyCap(sender_timestamp), IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM))) {
 		return;
 	}
 	if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
-		zcmd::appendGroups(reply, replyCap(sender_timestamp), 0, "> ", IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC));
+		zcmd::appendGroups(reply, replyCap(sender_timestamp), 0, "> ",
+				   IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC),
+				   IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM));
 		return;
 	}
 	if (handleRadioCmd(sender_timestamp, command, reply)) {  // is a radio CLI command?
@@ -1766,6 +1775,7 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, cha
 			StrHelper::strncpy(_prefs->node_name, &config[5], sizeof(_prefs->node_name));
 			savePrefs();
 			_callbacks->onMtPrefsChanged();
+			_callbacks->onNodeNameChanged();
 			strcpy(reply, "OK");
 		} else {
 			strcpy(reply, "Error: name cannot contain [ ] \\ : , ? *");

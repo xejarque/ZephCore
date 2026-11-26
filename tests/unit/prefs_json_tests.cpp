@@ -398,3 +398,21 @@ TEST(pjson_damaged, "UNIT-PJSON-017", "A server prefs.json cut at any byte, zero
     }
 }
 
+TEST(pjson_vroom, "UNIT-PJSON-018", "Virtual room prefs survive server prefs.json; a file without z_room keeps defaults") {
+    NodePrefs p = defaults();
+    p.vroom.enabled = 1;
+    p.vroom.access = vroom::ACCESS_PRIVATE;
+    strcpy(p.vroom.password, "roompass");
+    MemStream s;
+    CHECK(serverPrefsToJson(p, s));
+    NodePrefs q = defaults();
+    CHECK(serverPrefsFromJson(q, s));
+    CHECK(q.vroom.enabled == 1 && q.vroom.access == vroom::ACCESS_PRIVATE);
+    CHECK(std::string(q.vroom.password) == "roompass");
+
+    MemStream legacy("{name:\"R\",lat:0,lon:0}");
+    NodePrefs d = defaults();
+    CHECK(serverPrefsFromJson(d, legacy));
+    CHECK(d.vroom.enabled == 0 && d.vroom.access == vroom::ACCESS_OPEN && d.vroom.password[0] == '\0');
+}
+

@@ -12,7 +12,7 @@
     return n <= 4 ? n + 4 : n;
   }
 
-  function buildConfigCommands(cfg) {
+  function buildConfigCommands(cfg, nowEpoch = Math.floor(Date.now() / 1000)) {
     const cr = firmwareCodingRate(cfg.cr);
 
     if (cfg.role === "observer") {
@@ -38,8 +38,12 @@
       `set z.mt.relay.opaque ${cfg.mtOpaque ? "on" : "off"}`,
       `set z.mt.hops ${cfg.mtHops}`,
       cfg.pingBot ? `set z.mt.ping.enable on /ping` : null,
+      cfg.role === "repeater" && cfg.vroomEnable ? `set z.room.access ${cfg.vroomAccess || "open"}` : null,
+      cfg.role === "repeater" && cfg.vroomEnable && cfg.vroomPass ? `set z.room.password ${cfg.vroomPass}` : null,
+      cfg.role === "repeater" && cfg.vroomEnable ? `set z.room.on on` : null,
       cfg.lat ? `set lat ${cfg.lat}` : null,
       cfg.lon ? `set lon ${cfg.lon}` : null,
+      Number.isInteger(nowEpoch) && nowEpoch > 0 ? `time ${nowEpoch}` : null,
       `reboot`
     ].filter(Boolean);
   }

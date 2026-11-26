@@ -188,6 +188,21 @@ protected:
   */
   virtual void onAckRecv(Packet* packet, uint32_t ack_crc) { }
 
+  // ZEPHCORE: optional secondary identity (e.g. virtual room server in RepeaterMesh).
+  virtual const LocalIdentity* getSecondaryIdentity() const { return nullptr; }
+  virtual int searchSecondaryPeersByHash(const uint8_t* hash) { (void)hash; return 0; }
+  virtual void getSecondaryPeerSharedSecret(uint8_t* dest_secret, int peer_idx) { (void)dest_secret; (void)peer_idx; }
+  virtual void onSecondaryPeerDataRecv(Packet* packet, uint8_t type, int sender_idx, const uint8_t* secret, uint8_t* data, size_t len) {
+    (void)packet; (void)type; (void)sender_idx; (void)secret; (void)data; (void)len;
+  }
+  virtual bool onSecondaryPeerPathRecv(Packet* packet, int sender_idx, const uint8_t* secret, uint8_t* path, uint8_t path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) {
+    (void)packet; (void)sender_idx; (void)secret; (void)path; (void)path_len; (void)extra_type; (void)extra; (void)extra_len;
+    return false;
+  }
+  virtual void onSecondaryAnonDataRecv(Packet* packet, const uint8_t* secret, const Identity& sender, uint8_t* data, size_t len) {
+    (void)packet; (void)secret; (void)sender; (void)data; (void)len;
+  }
+
   Mesh(Radio& radio, MillisecondClock& ms, RNG& rng, RTCClock& rtc, PacketManager& mgr, MeshTables& tables)
     : Dispatcher(radio, ms, mgr), _rng(&rng), _rtc(&rtc), _tables(&tables)
   {
@@ -238,6 +253,10 @@ public:
   Packet* createMultiAck(uint32_t ack_crc, uint8_t remaining) { return createMultiAck((uint8_t *)&ack_crc, 4, remaining); }
   Packet* createPathReturn(const uint8_t* dest_hash, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len);
   Packet* createPathReturn(const Identity& dest, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len);
+  // ZEPHCORE: source-identity variants for secondary virtual identities.
+  Packet* createDatagramFrom(const LocalIdentity& from, uint8_t type, const Identity& dest, const uint8_t* secret, const uint8_t* data, size_t len);
+  Packet* createPathReturnFrom(const LocalIdentity& from, const uint8_t* dest_hash, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len);
+  Packet* createPathReturnFrom(const LocalIdentity& from, const Identity& dest, const uint8_t* secret, const uint8_t* path, uint8_t path_len, uint8_t extra_type, const uint8_t*extra, size_t extra_len);
   Packet* createRawData(const uint8_t* data, size_t len);
   Packet* createTrace(uint32_t tag, uint32_t auth_code, uint8_t flags = 0);
   Packet* createControlData(const uint8_t* data, size_t len);

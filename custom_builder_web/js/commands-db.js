@@ -367,6 +367,67 @@ window.ZEPHTACORE_COMMANDS = [
     tags: ["meshcore", "vecinos", "topologia"]
   },
 
+  {
+    name: "z.room.on",
+    category: "meshcore",
+    type: "get|set",
+    params: "on|off|1|0",
+    default: "off",
+    desc: "Activa o desactiva la Sala Virtual integrada en el repetidor (identidad secundaria ADV_TYPE_ROOM en /lfs/repeater/room.id). Al activarla emite un advert inicial; los periódicos salen escalonados 30 s tras el del repetidor.",
+    example: "set z.room.on on",
+    tags: ["meshcore", "room", "sala", "repetidor"]
+  },
+  {
+    name: "z.room.access",
+    category: "meshcore",
+    type: "get|set",
+    params: "open|readonly|private",
+    default: "open",
+    desc: "Política de acceso de la sala virtual. 'open': abierta (lectura y escritura sin clave); 'readonly': solo lectura pública ('[RO]'); 'private': privada ('[Priv]', requiere z.room.password o clave admin). Re-anuncia el nombre derivado automáticamente.",
+    example: "set z.room.access readonly",
+    tags: ["meshcore", "room", "acceso", "privacidad"]
+  },
+  {
+    name: "z.room.password",
+    category: "meshcore",
+    type: "get|set",
+    params: "<clave>|clear",
+    default: "(none)",
+    desc: "Establece o limpia la contraseña de escritura para miembros de la sala virtual (1–15 caracteres), independiente de guest.password del repetidor.",
+    example: "set z.room.password miclave",
+    tags: ["meshcore", "room", "seguridad", "password"]
+  },
+  {
+    name: "z.room.post",
+    category: "meshcore",
+    type: "set",
+    params: "<texto>",
+    default: "-",
+    desc: "Publica un mensaje de sistema en la sala virtual cuando z.room.on está activo.",
+    example: "set z.room.post Mantenimiento programado a las 22h",
+    tags: ["meshcore", "room", "bbs"]
+  },
+  {
+    name: "z.room.advert",
+    category: "meshcore",
+    type: "set",
+    params: "[flood]",
+    default: "-",
+    desc: "Envía de inmediato un advert zero-hop o flood de la identidad de la sala virtual.",
+    example: "set z.room.advert flood",
+    tags: ["meshcore", "room", "advert"]
+  },
+  {
+    name: "z.room.acl",
+    category: "meshcore",
+    type: "get",
+    params: "",
+    default: "-",
+    desc: "Lista las entradas de la ACL de la sala virtual (/lfs/repeater/room_acl) con sus permisos y prefijo de clave pública.",
+    example: "get z.room.acl",
+    tags: ["meshcore", "room", "acl"]
+  },
+
   // --- Ping compartido y diagnóstico ---
   {
     name: "z.ping.snr",

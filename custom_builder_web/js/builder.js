@@ -21,6 +21,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const mtHopsInput = document.getElementById("mtHops");
   const pingBotCheck = document.getElementById("pingBot");
   const firewallCheck = document.getElementById("firewallEnable");
+  const vroomSection = document.getElementById("vroomSection");
+  const vroomEnableCheck = document.getElementById("vroomEnable");
+  const vroomOptions = document.getElementById("vroomOptions");
+  const vroomAccessSelect = document.getElementById("vroomAccess");
+  const vroomPassInput = document.getElementById("vroomPass");
 
   // Custom Identity Elements
   const nodeNameInput = document.getElementById("nodeNameInput");
@@ -169,6 +174,9 @@ document.addEventListener("DOMContentLoaded", () => {
       mtHops: mtHopsInput ? mtHopsInput.value : "7",
       pingBot: pingBotCheck ? pingBotCheck.checked : false,
       firewall: firewallCheck ? firewallCheck.checked : true,
+      vroomEnable: selectedRole.id === "repeater" && vroomEnableCheck ? vroomEnableCheck.checked : false,
+      vroomAccess: vroomAccessSelect ? vroomAccessSelect.value : "open",
+      vroomPass: vroomPassInput ? vroomPassInput.value.trim() : "",
       timestamp: new Date().toISOString()
     };
   }
@@ -181,7 +189,18 @@ document.addEventListener("DOMContentLoaded", () => {
     sessionStorage.setItem("zephtacore_pending_config", JSON.stringify(cfg));
   }
 
+  function syncVroomVisibility() {
+    const isRepeater = selectedRole.id === "repeater";
+    if (vroomSection) {
+      vroomSection.style.display = isRepeater ? "" : "none";
+    }
+    if (vroomOptions) {
+      vroomOptions.style.display = isRepeater && vroomEnableCheck && vroomEnableCheck.checked ? "" : "none";
+    }
+  }
+
   function updateOutputs() {
+    syncVroomVisibility();
     saveCurrentConfig();
 
     const roleName = selectedRole.id;
@@ -233,7 +252,14 @@ document.addEventListener("DOMContentLoaded", () => {
           sf: parseInt(cfg.sf, 10),
           cr: parseInt(cfg.cr, 10),
           tx_power: parseInt(cfg.txPower, 10)
-        }
+        },
+        ...(cfg.role === "repeater" ? {
+          z_room: {
+            enabled: cfg.vroomEnable ? 1 : 0,
+            access: cfg.vroomAccess === "readonly" ? 1 : (cfg.vroomAccess === "private" ? 2 : 0),
+            pass: cfg.vroomPass || ""
+          }
+        } : {})
       };
       const blob = new Blob([JSON.stringify(prefs, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
@@ -266,7 +292,7 @@ CONFIG_ZEPHTACORE_MESHTASTIC=y
 CONFIG_ZEPHTACORE_MT_HOP_LIMIT=${cfg.mtHops}
 CONFIG_ZEPHCORE_DEFAULT_TX_POWER_DBM=${cfg.txPower}
 CONFIG_ZEPHCORE_ADMIN_PASSWORD=${kconfigString(cfg.adminPass)}
-${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)}\n` : ""}`;
+${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)}\n` : ""}${cfg.role === "repeater" && cfg.vroomEnable ? "CONFIG_ZEPHCORE_REPEATER_ROOM=y\n" : ""}`;
 
       const blob = new Blob([conf], { type: "text/plain" });
       const a = document.createElement("a");
@@ -314,6 +340,7 @@ ${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)
   [
     sfSlider, bwSelect, crSelect, freqInput, txPowerInput,
     mtRelaySelect, mtOpaqueCheck, mtHopsInput, pingBotCheck, firewallCheck,
+    vroomEnableCheck, vroomAccessSelect, vroomPassInput,
     nodeNameInput, adminPassInput, guestPassInput, nodeLatInput, nodeLonInput,
     nodeAltInput, gpsModeSelect
   ].forEach((el) => {

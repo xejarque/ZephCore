@@ -34,6 +34,7 @@ add_executable(zephcore_unit
   unit/cli_reply_tests.cpp
   unit/uidash_tests.cpp
   unit/rescue_tests.cpp
+  unit/vroom_tests.cpp
   support/hash_capture.cpp
   support/identity_utils_boundary.cpp
   ${PRODUCTION}/src/Dispatcher.cpp
@@ -62,7 +63,8 @@ add_executable(zephcore_unit
 )
 target_compile_features(zephcore_unit PRIVATE cxx_std_17)
 target_compile_definitions(zephcore_unit PRIVATE CONFIG_ZEPHCORE_PACKET_LOGGING=0 CONFIG_ZEPHTACORE_MESHTASTIC=1 CONFIG_ZEPHTACORE_FOREIGN_TAIL_SLOTS=4
-  CONFIG_ZEPHCORE_AUTO_SHUTDOWN_MILLIVOLTS=3200 CONFIG_ZEPHCORE_UI_DESIGN_JOYSTICK=1 CONFIG_ZEPHCORE_UI_DESIGN_BUTTON=0)
+  CONFIG_ZEPHCORE_AUTO_SHUTDOWN_MILLIVOLTS=3200 CONFIG_ZEPHCORE_UI_DESIGN_JOYSTICK=1 CONFIG_ZEPHCORE_UI_DESIGN_BUTTON=0
+  CONFIG_ZEPHCORE_REPEATER_ROOM=1)
 target_include_directories(zephcore_unit PRIVATE
   support unit ${PRODUCTION} ${PRODUCTION}/include ${PRODUCTION}/helpers ${PRODUCTION}/helpers/compat ${PRODUCTION}/helpers/meshtastic ${PRODUCTION}/helpers/ui ${PRODUCTION}/helpers
   ${PRODUCTION}/lib/monocypher

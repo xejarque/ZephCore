@@ -300,10 +300,21 @@ config ZEPHCORE_GUEST_PASSWORD
 
 	  Set a non-empty value to require a password on either role.
 
+config ZEPHCORE_REPEATER_ROOM
+	bool "Enable virtual Room Server inside Repeater"
+	depends on ZEPHCORE_ROLE_REPEATER
+	default y if ZEPHTACORE_MESHTASTIC
+	default n
+	help
+	  Adds a secondary virtual Room Server identity (ADV_TYPE_ROOM) inside
+	  the Repeater role, sharing the radio, region map and admin password
+	  while retaining full repeater discovery, neighbors and routing.
+	  Controlled at runtime via "set z.room.on on|off".
+
 config ZEPHCORE_MAX_UNSYNCED_POSTS
 	int "Room server: max buffered posts"
 	default 32
-	depends on ZEPHCORE_ROLE_ROOM_SERVER
+	depends on ZEPHCORE_ROLE_ROOM_SERVER || ZEPHCORE_REPEATER_ROOM
 	help
 	  Size of the room server's circular post buffer.  When full, the
 	  oldest unsynced post is overwritten.  Matches upstream MeshCore (32).
