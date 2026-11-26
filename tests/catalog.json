@@ -1078,6 +1078,86 @@
       "source": "tests/unit/fw_tests.cpp"
     },
     {
+      "id": "UNIT-RESCUE-001",
+      "name": "a configured node creates the copy at boot, byte for byte",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-002",
+      "name": "a missing file and a file that does not load come back from the copy",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-003",
+      "name": "a file that loads is left alone and a whole entry is not replaced at boot",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-004",
+      "name": "files this boot creates on an empty node are not copied until the next boot or command",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-005",
+      "name": "after a command only the files that changed are written",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-006",
+      "name": "a file that does not load never reaches the copy",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-007",
+      "name": "once writing is stopped for an erase nothing more is written",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-008",
+      "name": "files of one byte, a whole chunk, one more and the maximum go round trip",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-009",
+      "name": "an empty or oversize file is not written and the old entry stays whole",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-010",
+      "name": "a file that shrinks leaves no old chunks behind",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-011",
+      "name": "a write cut at any point leaves a broken entry, repaired at the next boot",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-012",
+      "name": "a damaged chunk, a short head or another format is never restored",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-013",
+      "name": "storage that cannot be read is kept through a format and not written in that boot",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-014",
+      "name": "a format keeps the storage only while an entry is whole or unreadable",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-015",
+      "name": "a file that cannot be written back keeps its entry and is still readable from it",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-016",
+      "name": "restores add up across boots and an unset clock leaves the time unknown",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
       "id": "UNIT-RX-001",
       "name": "Frames are counted by hops crossed, 7 or more together, unknown apart; empty buckets are left out",
       "source": "tests/unit/rxstats_tests.cpp"

@@ -33,6 +33,7 @@ add_executable(zephcore_unit
   unit/cli_parse_tests.cpp
   unit/cli_reply_tests.cpp
   unit/uidash_tests.cpp
+  unit/rescue_tests.cpp
   support/hash_capture.cpp
   support/identity_utils_boundary.cpp
   ${PRODUCTION}/src/Dispatcher.cpp
