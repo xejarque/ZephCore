@@ -47,6 +47,8 @@ while the file loads.
   settings of both meshes. Clients log in again, and permissions granted without a password are granted again.
 - The copy holds the last state saved by this fork. Changes made while running other firmware are copied after the
   first administration command back on this one.
+- Upstream ZephCore drops this fork's keys when it saves `prefs.json`. Such a file loads, so nothing is restored,
+  and the first administration command copies it without them: the Meshtastic settings are then the defaults.
 - Switching to upstream ZephCore keeps the copy. `erase`, the formatter, or companion firmware (which formats a
   server volume) remove it. Firmware that does not touch the region leaves it, and returning restores the old
   configuration: run `erase` before giving a node away.

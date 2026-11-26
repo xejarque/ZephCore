@@ -57,8 +57,8 @@ Una unidad revisable por tarea, con commit propio en rama de trabajo desde `fork
 - [x] **T3.** Secuencia de arranque, conservación al formatear y desarmado tras `erase`.
 - [x] **T4.** Escritura tras comando y `get z.rescue`.
 - [x] **T5.** Documentación y notas de versión.
-- [ ] **T6.** Compilaciones y medida de flash y RAM.
-- [ ] **T7.** Pruebas en banco.
+- [x] **T6.** Compilaciones y medida de flash y RAM.
+- [x] **T7.** Pruebas en banco (RAK4631, 2026-11-26; ver «Resultado»).
 
 ## Tests de host
 
@@ -92,13 +92,38 @@ El arnés de host no compila `app/` ni `CommonCLI.cpp` (QA-3): el cableado se ve
 | B9 | Basura en `storage_partition` | Arranca sin colgarse y recrea la copia |
 | B10 | Cambiar entre repetidor y room server; flashear companion | La copia sigue; con companion desaparece |
 
-## Por comprobar durante la implementación
+## Resultado de las compilaciones
 
-- Arranque de la NVS sobre bytes de otro firmware: el companion documenta un cuelgue (`formatNVSOnly`). Si B9 se
-  cuelga en vez de fallar, el borrado por fallo de arranque no basta y hay que rediseñar ese punto.
-- ~~`zephcore_prefs_json_load` rechaza un fichero truncado.~~ Sí: rechaza el vacío y el parser cualquier corte, ceros
-  o flash borrada (UNIT-PJSON-017).
-- Coste en flash y RAM de enlazar settings en el repetidor.
+Contra `f6d8e4f9`, sin avisos nuevos.
+
+| Build | Flash | RAM | Copia |
+| --- | --- | --- | --- |
+| `rak4631` repetidor | +8004 B (312400) | +1152 B (88292) | sí |
+| `rak4631` room server | +8008 B (285468) | +1152 B (86436) | sí |
+| `heltec_wifi_lora32_v3` repetidor | irom +8272 B, drom +464 B | dram +1184 B | sí |
+| `rak4631` companion | +188 B (CLI común) | 0 | no |
+| `gat562_30s` repetidor | 315436 B | 89060 B | sí |
+| `xiao_nrf54l15` repetidor, `rak4631` KISS, `xiao_esp32s3` observer | solo compilados | | no |
+
+## Resultado del banco
+
+RAK4631 por USB, radio fuera de la red real (869.85 MHz). Los fallos se forzaron con un firmware de un solo uso, sin
+commit, que ensucia las particiones y reinicia tras una escritura concreta.
+
+| # | Resultado |
+| --- | --- |
+| B1 | Pasa. |
+| B2 | Pasa: clave, radio, regiones, `z.mt.*` y zero-hop idénticos. Login remoto y repetición en el aire **sin probar**. |
+| B3 | Pasa: cada daño suma una sola restauración. |
+| B4 | Pasa con reinicio por software; corte físico de alimentación **sin probar**. |
+| B5 | Pasa con reinicio por software, en `set` y `region save`. |
+| B6 | Pasa. |
+| B7 | Pasa: la copia sigue. Si en ZephCore original se guarda un ajuste, su `prefs.json` pierde `z.mt.*`. |
+| B8 | Pasa con `erase` y con el formateador. |
+| B9 | Pasa con bytes aleatorios, ceros y bytes de LittleFS: arranca y recrea la copia. |
+| B10 | Pasa: room server conserva, companion borra. |
+
+ESP32 sin probar en hardware.
 
 ## DMAR
 
