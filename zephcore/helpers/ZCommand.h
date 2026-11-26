@@ -126,6 +126,7 @@ inline constexpr Help kHelp[] = {
 	{"mc.ping.enable", "get|set on [<command>]|off|1 [<command>]|0: bot on (needs a command) or off, default off"},
 	{"mc.ping.trigger", "get|set <command>: text to answer, 1-15 characters, no spaces, default none", true},
 	{"mc.ping.status", "get: state, command, answered and ignored"},
+	{"mc.regions", "get [page]: the region map in whole lines, as region shows it (repeater, room server)"},
 	{"mc.hopstats", "get: flood frames heard by hops crossed, 7+ at the end (repeater)"},
 	{"mc.relays", "get: last-hop repeater of the flood frames heard, most frames first (repeater)"},
 	{"mc.fw.drop", "get|set <rule> on|off|1|0 or none: payload types dropped: advert request text group ack path trace, default none (repeater)"},
@@ -139,7 +140,7 @@ inline constexpr Help kHelp[] = {
 	{"autoshutdown", "get|set 0 or 2900-4200 mV: power off under this battery voltage, 0 off, wakes on recovery; default 0 (companion nRF52: 3200)"},
 	{"info", "get: version, uptime, battery, flash, heap and contacts"},
 	{"stats", "get: MeshCore counters, then the Meshtastic ones"},
-	{"rescue", "get: the copy of identity, settings and regions, and files restored (repeater, room server)"},
+	{"rescue", "get: the copy of identity, settings, regions and room identity, and files restored (repeater, room server)"},
 	{"tx.stalls", "get: times TX could not go out for 4 s, per cause"},
 #ifdef CONFIG_ZEPHCORE_REPEATER_ROOM
 	{"room.on", "get|set on|off|1|0: virtual Room Server in repeater, default off"},

@@ -19,6 +19,7 @@
 #include <helpers/meshtastic/MtFirewall.h>
 #include <helpers/OffgridPolicy.h>
 #include <helpers/NeighbourList.h>
+#include <helpers/RegionPages.h>
 #include <helpers/ZCommand.h>
 #include <helpers/ZInfo.h>
 #include <helpers/HeapStats.h>
@@ -422,6 +423,46 @@ void CommonCLI::replyZStats(size_t cap, char* reply) {
 }
 
 /* The Zephtacore "z." commands that are not Meshtastic settings. False when the line is none of them. */
+#ifndef ZEPHCORE_COMPANION
+namespace {
+/* The region export, written straight into the pager. */
+class PagerStream : public Stream {
+public:
+	explicit PagerStream(region_pages::Pager &pager) : _pager(pager) {}
+
+	size_t write(uint8_t c) override
+	{
+		_pager.put((char)c);
+		return 1;
+	}
+	int available() override { return 0; }
+	int read() override { return -1; }
+	int peek() override { return -1; }
+
+private:
+	region_pages::Pager &_pager;
+};
+}  // namespace
+
+bool CommonCLI::replyRegionPage(uint32_t sender_timestamp, const char* command, char* reply) {
+	size_t page;
+
+	if (!region_pages::parseArgs(command, page)) {
+		return false;
+	}
+	if (_region_map == nullptr) {
+		snprintf(reply, replyCap(sender_timestamp), "Error: not available in this role");
+		return true;
+	}
+	region_pages::Pager pager(reply, replyCap(sender_timestamp), page);
+	PagerStream out(pager);
+
+	_region_map->exportTo(out);
+	pager.finish();
+	return true;
+}
+#endif
+
 bool CommonCLI::handleZCmd(uint32_t sender_timestamp, const char* command, char* reply) {
 	size_t page;
 	bool recent;
@@ -461,6 +502,11 @@ bool CommonCLI::handleZCmd(uint32_t sender_timestamp, const char* command, char*
 		replyZStats(replyCap(sender_timestamp), reply);
 		return true;
 	}
+#ifndef ZEPHCORE_COMPANION  /* no region map on a companion */
+	if (replyRegionPage(sender_timestamp, command, reply)) {
+		return true;
+	}
+#endif
 	if (strcmp(command, "get z.rescue") == 0) {
 		_callbacks->formatRescueReply(reply, replyCap(sender_timestamp));
 		return true;
@@ -1293,6 +1339,13 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, cha
 		snprintf(reply, CLI_REPLY_SIZE, "> %u", ((uint32_t)_prefs->advert_interval) * 2);
 	} else if (memcmp(config, "guest.password", 14) == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->guest_password);
+	} else if (strcmp(config, "password") == 0) {
+		/* ZEPHCORE: only an admin or the serial console reaches the CLI. */
+		if (strcmp(_callbacks->getRole(), "companion") == 0) {
+			strcpy(reply, "Error: not supported on companion");
+		} else {
+			snprintf(reply, replyCap(sender_timestamp), "> %s", _prefs->password);
+		}
 	} else if (sender_timestamp == 0 && memcmp(config, "prv.key", 7) == 0) {
 		uint8_t prv_key[PRV_KEY_SIZE];
 		int len = _callbacks->getSelfId().writeTo(prv_key, PRV_KEY_SIZE);

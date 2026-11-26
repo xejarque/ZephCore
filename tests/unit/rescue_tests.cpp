@@ -112,10 +112,11 @@ std::string entry(rescue::Copy<FakeStore, FakeFiles> &copy, Item item)
 TEST(rescue_created, "UNIT-RESCUE-001", "a configured node creates the copy at boot, byte for byte") {
     Node node;
     Boot boot(node);
-    for (Item item : rescue::ITEMS) {
-        CHECK(boot.copy.state(item) == State::Valid);
-        CHECK(entry(boot.copy, item) == node.files.files[item]);
+    for (const auto &file : node.files.files) {
+        CHECK(boot.copy.state(file.first) == State::Valid);
+        CHECK(entry(boot.copy, file.first) == file.second);
     }
+    CHECK(boot.copy.state(Item::RoomIdentity) == State::Absent);   // no virtual room on this node
     CHECK(boot.copy.restores().count == 0);
 }
 
@@ -341,7 +342,7 @@ TEST(rescue_report, "UNIT-RESCUE-017", "z.rescue names each entry, the restores 
     third.copy.report(reply, sizeof(reply));
     CHECK(std::string(reply) == "> identity ok, prefs ok, regions none | restores 2, last at unknown time");
 
-    const State worst[] = {State::Unreadable, State::Unreadable, State::Unreadable};
+    const State worst[] = {State::Unreadable, State::Unreadable, State::Unreadable, State::Unreadable};
     rescue::formatReport(reply, sizeof(reply), worst, {UINT32_MAX, UINT32_MAX});
     CHECK(std::string(reply).find(" UTC") != std::string::npos);
     CHECK(std::string(reply).size() < 150);             // leaves room for the reply header
@@ -357,4 +358,22 @@ TEST(rescue_unchanged_not_loaded, "UNIT-RESCUE-018", "a command loads only the f
     node.files.files[Item::Prefs][0] ^= 1;
     boot.copy.followFiles();
     CHECK(node.files.load_checks == 1);
+}
+
+TEST(rescue_room_identity, "UNIT-RESCUE-019", "the virtual room identity is copied, comes back and is named in the report only when there is one") {
+    Node node;
+    char reply[161];
+    Boot without(node);
+    without.copy.report(reply, sizeof(reply));
+    CHECK(std::string(reply) == "> identity ok, prefs ok, regions ok | restores 0");
+
+    node.files.files[Item::RoomIdentity] = bytes(96, 10);   // the room is switched on
+    without.copy.followFiles();
+    CHECK(node.store.keys.count("ztc/rc/room/head") == 1);
+    node.files.files.erase(Item::RoomIdentity);
+
+    Boot lost(node);
+    CHECK(node.files.files[Item::RoomIdentity] == bytes(96, 10));
+    lost.copy.report(reply, sizeof(reply));
+    CHECK(std::string(reply) == "> identity ok, prefs ok, regions ok, room ok | restores 1, last at unknown time");
 }

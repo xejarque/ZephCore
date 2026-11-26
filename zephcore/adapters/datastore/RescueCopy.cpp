@@ -166,10 +166,10 @@ bool RescueCopy::readPrefs(NodePrefs &prefs)
 
 void RescueFiles::pathOf(rescue::Item item, char (&path)[PATH_CAP]) const
 {
-	const char *name = item == rescue::Item::Identity ? "_main.id" :
-			   item == rescue::Item::Prefs ? "prefs.json" : "regions2";
+	static constexpr const char *names[] = {"_main.id", "prefs.json", "regions2", "room.id"};
 
-	snprintf(path, PATH_CAP, "%s/%s", _dir, name);
+	static_assert(ARRAY_SIZE(names) == rescue::ITEM_COUNT, "one file per item");
+	snprintf(path, PATH_CAP, "%s/%s", _dir, names[static_cast<size_t>(item)]);
 }
 
 /* Each file is judged by the loader its owner uses. */
@@ -179,7 +179,8 @@ bool RescueFiles::loads(rescue::Item item)
 
 	pathOf(item, path);
 	switch (item) {
-	case rescue::Item::Identity: {
+	case rescue::Item::Identity:
+	case rescue::Item::RoomIdentity: {
 		mesh::LocalIdentity id;
 
 		return zephcore_identity_load(path, id);
@@ -189,9 +190,10 @@ bool RescueFiles::loads(rescue::Item item)
 
 		return zephcore_prefs_json_load(path, probe, serverPrefsFromJson);
 	}
-	default:
+	case rescue::Item::Regions:
 		return regionsLoad();
 	}
+	return false;
 }
 
 bool RescueFiles::regionsLoad() const

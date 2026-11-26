@@ -174,6 +174,9 @@ class CommonCLI {
 	bool handleRadioCmd(uint32_t sender_timestamp, const char* command, char* reply);
 	bool handleMtCmd(uint32_t sender_timestamp, const char* command, char* reply);
 	bool handleZCmd(uint32_t sender_timestamp, const char* command, char* reply);
+#ifndef ZEPHCORE_COMPANION
+	bool replyRegionPage(uint32_t sender_timestamp, const char* command, char* reply);
+#endif
 	void replyZInfo(size_t cap, char* reply);
 	void replyZStats(size_t cap, char* reply);
 	void handleGetCmd(uint32_t sender_timestamp, const char* command, char* reply);

@@ -14,8 +14,8 @@ holds no bonds. A new partition would move this fork away from upstream's flash 
 
 ## Decision
 
-- A server role keeps a copy of three files in the settings NVS: the identity, `prefs.json` and `regions2`. The ACL
-  is not copied.
+- A server role keeps a copy of its files in the settings NVS: the identity, `prefs.json`, `regions2` and, on a
+  repeater whose virtual room has been switched on, `room.id`. No ACL is copied, the virtual room's included.
 - Built where the node is a repeater or a room server and the settings backend is NVS
   (`CONFIG_ZEPHTACORE_RESCUE_COPY`). No partition changes.
 - The files are copied byte for byte, so the copy does not depend on their formats. A file larger than one NVS entry
@@ -44,7 +44,8 @@ while the file loads.
 ## Consequences
 
 - After the loss of the filesystem the node comes back with the same key, password, radio, regions and repeat
-  settings of both meshes. Clients log in again, and permissions granted without a password are granted again.
+  settings of both meshes, and its virtual room with the same key. Clients log in again, and permissions granted
+  without a password are granted again.
 - The copy holds the last state saved by this fork. Changes made while running other firmware are copied after the
   first administration command back on this one.
 - Upstream ZephCore drops this fork's keys when it saves `prefs.json`. Such a file loads, so nothing is restored,

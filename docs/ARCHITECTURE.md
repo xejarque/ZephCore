@@ -893,16 +893,17 @@ Loading also range-checks `freq`/`sf`/`bw` and falls back to the compile-time de
 
 **Rescue copy of a server node** (Zephtacore, [ADR 0021](adr/0021-rescue-copy-in-settings-nvs.md),
 `CONFIG_ZEPHTACORE_RESCUE_COPY`: repeater and room server with the NVS settings backend, so nRF52 and ESP32).
-`rescue::Copy` (`helpers/RescuePolicy.h`, pure code, host tested) keeps `_main.id`, `prefs.json` and `regions2` under
-the settings keys `ztc/rc/`, each as 1 KB chunks followed by a head with format, length and CRC-32; a file over 6 KB is
-not copied. `RescueCopy` (`adapters/datastore/`) is its storage and file access, owned by `RepeaterDataStore`.
+`rescue::Copy` (`helpers/RescuePolicy.h`, pure code, host tested) keeps `_main.id`, `prefs.json`, `regions2` and, once
+the virtual room has been switched on, `room.id` under the settings keys `ztc/rc/`, each as 1 KB chunks followed by a
+head with format, length and CRC-32; a file over 6 KB is not copied. `RescueCopy` (`adapters/datastore/`) is its storage
+and file access, owned by `RepeaterDataStore`.
 
 - Boot: the storage is opened before anything else (a settings backend that does not start has its region erased
   once). The first-boot format leaves `storage_partition` alone, then clears it through NVS unless an entry is whole or
   unreadable. Before identity, prefs and regions are loaded, a file that does not load is written back from a whole
   entry, and a file that loads creates or repairs its entry; a whole entry is never replaced at boot.
 - After an administration command (USB or radio) the server loop writes the entries whose file changed. Automatic saves
-  (radio calibration) reach the copy with the next command. The ACL is not copied.
+  (radio calibration) reach the copy with the next command. No ACL is copied.
 - Nothing is written until the reboot after `erase`, after a file that could not be written back, or when the storage
   could not be read. If the filesystem cannot take a file back, identity and prefs are read from the copy into RAM.
 - `get z.rescue` reports each entry, the number of files restored and when the last one was.
@@ -910,6 +911,10 @@ not copied. `RescueCopy` (`adapters/datastore/`) is its storage and file access,
   formatter and a companion's first boot remove it.
 - RAM: about 1.2 KB on server roles (a 1 KB chunk buffer and the entry heads). Boot and the pass after a command parse
   the prefs and the regions into temporaries on the main stack.
+
+**Region pages** (`helpers/RegionPages.h`, pure code, host tested): `get z.mc.regions [page]` streams the region export
+through `region_pages::Pager`, which packs whole lines into the reply of that caller, so a page holds more over USB
+than over the mesh.
 
 **Writes that can fail.** The ACL and the region map are written through `<path>.tmp` and renamed on close, and only when no write came up short and `fs_sync()` succeeded, so an interrupted or failed save leaves the previous file in place instead of a truncated one. `ZephyrDataStore::savePrefs` reports whether the write landed; when it did not, the change lives in RAM until the next reboot and the CLI replies `Error: not saved - reverts at the next reboot` instead of `OK`. An unreadable `prefs.json` is logged in `ERR` together with the settings the node is starting with.
 

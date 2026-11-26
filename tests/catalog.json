@@ -1088,6 +1088,21 @@
       "source": "tests/unit/fw_tests.cpp"
     },
     {
+      "id": "UNIT-REGPAGE-001",
+      "name": "the page is 1 without one, 0 when it is not a plain number, and other commands are not ours",
+      "source": "tests/unit/region_pages_tests.cpp"
+    },
+    {
+      "id": "UNIT-REGPAGE-002",
+      "name": "a map that fits is one page with its lines unchanged",
+      "source": "tests/unit/region_pages_tests.cpp"
+    },
+    {
+      "id": "UNIT-REGPAGE-003",
+      "name": "the pages of a full map fit the reply and give back every line once",
+      "source": "tests/unit/region_pages_tests.cpp"
+    },
+    {
       "id": "UNIT-RESCUE-001",
       "name": "a configured node creates the copy at boot, byte for byte",
       "source": "tests/unit/rescue_tests.cpp"
@@ -1175,6 +1190,11 @@
     {
       "id": "UNIT-RESCUE-018",
       "name": "a command loads only the files that differ from the copy",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
+      "id": "UNIT-RESCUE-019",
+      "name": "the virtual room identity is copied, comes back and is named in the report only when there is one",
       "source": "tests/unit/rescue_tests.cpp"
     },
     {

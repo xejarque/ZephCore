@@ -1,9 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
  * Zephtacore: the rescue copy a repeater or room server keeps of its identity,
- * preferences and regions (ADR 0021): how a file is stored as checksummed
- * chunks, when it is put back and when the copy is written. Pure code, host
- * tested; the storage and the files are template parameters.
+ * preferences, regions and virtual room identity (ADR 0021): how a file is
+ * stored as checksummed chunks, when it is put back and when the copy is
+ * written. Pure code, host tested; the storage and the files are template
+ * parameters.
  *
  * Store: int read(key, buf, cap)    bytes read, 0: no such key, <0: error
  *        bool write(key, data, len)
@@ -24,8 +25,8 @@
 
 namespace rescue {
 
-enum class Item : uint8_t { Identity, Prefs, Regions };
-constexpr Item ITEMS[] = {Item::Identity, Item::Prefs, Item::Regions};
+enum class Item : uint8_t { Identity, Prefs, Regions, RoomIdentity };
+constexpr Item ITEMS[] = {Item::Identity, Item::Prefs, Item::Regions, Item::RoomIdentity};
 constexpr size_t ITEM_COUNT = sizeof(ITEMS) / sizeof(ITEMS[0]);
 
 enum class State : uint8_t { Absent, Broken, Valid, Unreadable };
@@ -58,7 +59,8 @@ inline const char *itemName(Item item)
 	switch (item) {
 	case Item::Identity: return "id";
 	case Item::Prefs: return "prefs";
-	default: return "regions";
+	case Item::Regions: return "regions";
+	default: return "room";
 	}
 }
 
@@ -99,12 +101,16 @@ inline const char *stateName(State state)
 	}
 }
 
-/* The reply of "get z.rescue", short enough for one remote reply. */
+/* The reply of "get z.rescue", short enough for one remote reply. A node with
+ * no virtual room does not name it. */
 inline void formatReport(char *out, size_t cap, const State (&states)[ITEM_COUNT],
 			 const Restores &restores)
 {
-	const int n = snprintf(out, cap, "> identity %s, prefs %s, regions %s | restores %u",
+	const State room = states[static_cast<size_t>(Item::RoomIdentity)];
+	const bool has_room = room != State::Absent;
+	const int n = snprintf(out, cap, "> identity %s, prefs %s, regions %s%s%s | restores %u",
 			       stateName(states[0]), stateName(states[1]), stateName(states[2]),
+			       has_room ? ", room " : "", has_room ? stateName(room) : "",
 			       (unsigned)restores.count);
 
 	if (restores.count == 0 || n < 0 || (size_t)n >= cap) {
@@ -174,7 +180,7 @@ public:
 	void followFiles()
 	{
 		for (Item item : ITEMS) {
-			if (!holds(item) && _files.loads(item)) {
+			if (_files.size(item) > 0 && !holds(item) && _files.loads(item)) {
 				save(item);
 			}
 		}
