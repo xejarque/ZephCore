@@ -327,6 +327,8 @@ it polls external state. Repeater and room server share one loop (`server_main_c
   still fails, the companion falls back to `/lfs` and the next boot that mounts `/ext` keeps the `/ext` copy.
 - Prefs are upstream's `prefs.json` (ZephCore fields under `zc`); the legacy binary layouts are migrated once and
   kept for downgrades.
+- A repeater or room server mirrors identity, `prefs.json` and regions in the settings NVS and puts back a file
+  that does not load ([ADR 0021](adr/0021-rescue-copy-in-settings-nvs.md)); the file stays the source of truth.
 - Atomic replace for identity, prefs and channels; contacts on `/ext` only.
 
 ### 8.6 Observability

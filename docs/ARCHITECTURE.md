@@ -873,7 +873,8 @@ Full command reference with constraints and remote-admin restrictions: `CLI_comm
   boot-time probe could beat a cold power rail (first boot after a UF2 update) and silently drop to internal flash.
   Roles that keep nothing on `/ext` (repeater, room server, observer) put the flash into deep power-down at start-up
   (`zephcore_fs_ext_power_down()`), with chip-select held high; a factory `erase` resumes it and puts it back
-- **BLE bonds**: NVS (`storage_partition`, 0xD0000 on nRF52) via Zephyr settings backend (≥1.16.2)
+- **BLE bonds**: NVS (`storage_partition`, 0xD0000 on nRF52) via Zephyr settings backend (≥1.16.2). Server roles,
+  which have no Bluetooth, keep the rescue copy there
 - **Prefs**: `prefs.json` through upstream's `ConfigSerializer`, with upstream's key names for shared fields and ZephCore's own under `zc` (see §13); the older binary file is read once to migrate and kept
 - **Contacts**: 152-byte records, stored on external flash if available
 - **Channels**: 68-byte records (4 pad + 32 name + 32 secret)
@@ -888,6 +889,26 @@ A marker file `/lfs/_zc_init` is written after the first clean ZephCore boot. On
 3. **Valid ZephCore prefs + no `/lfs/settings`** → skip format entirely. NVS was already initialised by ZephCore ≥1.16.2; bonds survive the upgrade.
 
 Loading also range-checks `freq`/`sf`/`bw` and falls back to the compile-time defaults on out-of-range values, so a misread file never corrupts the radio config. The check is written as "not inside" so a `NaN` read from an edited or corrupted file is caught too, and a read error on the identity file is not treated as inconsistent content: it neither renames the file away nor generates a new key, and a save refuses to overwrite an identity it cannot read back.
+
+**Rescue copy of a server node** (Zephtacore, [ADR 0021](adr/0021-rescue-copy-in-settings-nvs.md),
+`CONFIG_ZEPHTACORE_RESCUE_COPY`: repeater and room server with the NVS settings backend, so nRF52 and ESP32).
+`rescue::Copy` (`helpers/RescuePolicy.h`, pure code, host tested) keeps `_main.id`, `prefs.json` and `regions2` under
+the settings keys `ztc/rc/`, each as 1 KB chunks followed by a head with format, length and CRC-32; a file over 6 KB is
+not copied. `RescueCopy` (`adapters/datastore/`) is its storage and file access, owned by `RepeaterDataStore`.
+
+- Boot: the storage is opened before anything else (a settings backend that does not start has its region erased
+  once). The first-boot format leaves `storage_partition` alone, then clears it through NVS unless an entry is whole or
+  unreadable. Before identity, prefs and regions are loaded, a file that does not load is written back from a whole
+  entry, and a file that loads creates or repairs its entry; a whole entry is never replaced at boot.
+- After an administration command (USB or radio) the server loop writes the entries whose file changed. Automatic saves
+  (radio calibration) reach the copy with the next command. The ACL is not copied.
+- Nothing is written until the reboot after `erase`, after a file that could not be written back, or when the storage
+  could not be read. If the filesystem cannot take a file back, identity and prefs are read from the copy into RAM.
+- `get z.rescue` reports each entry, the number of files restored and when the last one was.
+- The copy reflects the last state saved by this firmware. Upstream ZephCore leaves it in place; `erase`, the
+  formatter and a companion's first boot remove it.
+- RAM: about 1.2 KB on server roles (a 1 KB chunk buffer and the entry heads). Boot and the pass after a command parse
+  the prefs and the regions into temporaries on the main stack.
 
 **Writes that can fail.** The ACL and the region map are written through `<path>.tmp` and renamed on close, and only when no write came up short and `fs_sync()` succeeded, so an interrupted or failed save leaves the previous file in place instead of a truncated one. `ZephyrDataStore::savePrefs` reports whether the write landed; when it did not, the change lives in RAM until the next reboot and the CLI replies `Error: not saved - reverts at the next reboot` instead of `OK`. An unreadable `prefs.json` is logged in `ERR` together with the settings the node is starting with.
 
@@ -1334,14 +1355,14 @@ Codes `0x80`–`0x90` (`PUSH_CODE_*` in `app/CompanionMesh.h`). Most used:
 | `/lfs/repeater/_main.id`, `prefs.json` | Repeater/room-server/observer identity + prefs (KISS modem: identity only) | `prefs.json` as above; legacy 311B `prefs` kept after migration; atomic-replace writes |
 | `/lfs/repeater/acl` | Client ACL | 136B × N records |
 | `/lfs/repeater/regions2` | Region map | Header + 164B × N entries |
-| `storage_partition` (NVS, 0xD0000 nRF52) | BLE bonds + Zephyr settings | NVS settings backend (≥1.16.2; old `/lfs/settings` file detected by self-heal) |
+| `storage_partition` (NVS, 0xD0000 nRF52) | BLE bonds + Zephyr settings; rescue copy on repeater and room server (`ztc/rc/`) | NVS settings backend (≥1.16.2; old `/lfs/settings` file detected by self-heal) |
 
 > **Roles are not interchangeable.** Each role formats the whole volume on its first boot if the
 > volume holds no data for that role: the companion checks `/lfs/prefs.json` and `/lfs/new_prefs`
 > (`ZephyrDataStore::hasPrefs()`), the repeater/room-server/observer/KISS modem check `/lfs/repeater/prefs.json`,
 > `/lfs/repeater/prefs` and `/lfs/repeater/_main.id` (`RepeaterDataStore::hasRoleData()`). So flashing a repeater over
 > a companion — or the reverse — erases the previous role's identity, prefs and contacts, plus
-> `storage_partition` and QSPI. Export your identity before switching roles. The roles' files
+> `storage_partition` and QSPI (a server role keeps `storage_partition` when it holds a rescue copy). Export your identity before switching roles. The roles' files
 > never overlap physically (one LittleFS volume, one allocator); the reason for the wipe is that
 > they share 128 KB and the other role's data crowds out writes. Repeater, room server and
 > observer share `/lfs/repeater/` and the same prefs layout, so switching among *those three*
@@ -1357,7 +1378,7 @@ upstream's use its keys and nesting (companion: `name`, `lat`, `lon`, `radio{}`,
 `f_adv_int`, `lat`, `lon`, `radio{}`, `gps{}`, `repeat{}`, `room{}`, `power{}`), and ZephCore's own
 settings live under `zc{}`. Unknown keys are ignored and missing keys keep their defaults, so
 adding a field never shifts another. Writes are atomic (`.tmp`, sync, rename); a file that does not
-parse falls back to the legacy file, then to defaults.
+parse falls back to the legacy file, then to defaults (a server role with a rescue copy restores it first, §7.2).
 
 **Legacy binary files.** Firmware before `prefs.json` wrote field-by-field binary files: companion
 `/lfs/new_prefs` (272 bytes) and servers `/lfs/repeater/prefs` (311 bytes; `leds_disabled` at 120

@@ -56,7 +56,7 @@ Una unidad revisable por tarea, con commit propio en rama de trabajo desde `fork
 - [x] **T2.** Almacén NVS y capacidad Kconfig.
 - [x] **T3.** Secuencia de arranque, conservación al formatear y desarmado tras `erase`.
 - [x] **T4.** Escritura tras comando y `get z.rescue`.
-- [ ] **T5.** Documentación y notas de versión.
+- [x] **T5.** Documentación y notas de versión.
 - [ ] **T6.** Compilaciones y medida de flash y RAM.
 - [ ] **T7.** Pruebas en banco.
 

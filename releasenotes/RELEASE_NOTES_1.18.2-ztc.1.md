@@ -32,6 +32,19 @@ default channels and node name in order.
 
 ---
 
+## A repeater or room server survives losing its file system
+
+- A repeater or room server on nRF52 or ESP32 keeps a copy of its identity, settings and regions outside the file
+  system. If the file system is lost, or one of those files no longer loads, the node comes back at the next boot with the
+  same key, password, radio parameters, regions and repeat settings of both meshes, so it can still be administered
+  over the air. Log in again: the list of clients and their permissions is not copied.
+- The copy is created by itself on a node that is already set up, and follows every administration command. `get
+  z.rescue` tells its state and whether a file has been restored. See `docs/CLI_commands.md`.
+- `erase`, the formatter and flashing companion firmware remove it. Run `erase` before giving a node away.
+- Not on MG24, nRF54L or STM32WL boards.
+
+---
+
 ## Low-battery power-off that wakes again (ProMicro SX1262)
 
 - On the ProMicro SX1262 a node that powers off on a low battery now wakes by itself once the battery recovers to

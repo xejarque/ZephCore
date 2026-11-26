@@ -104,8 +104,8 @@ TEST(zcmd_parse, "UNIT-ZCMD-007", "A z. line is taken apart once: get or set, th
 }
 
 TEST(zcmd_help_root, "UNIT-ZCMD-008", "help lists the groups of z., with / after one that has more under it; a build without Meshtastic has no mt/") {
-    CHECK(root() == "z. groups: mt/ mc/ ping/ autoshutdown info stats tx/");
-    CHECK(root(false) == "z. groups: mc/ ping/ autoshutdown info stats tx/");
+    CHECK(root() == "z. groups: mt/ mc/ ping/ autoshutdown info stats rescue tx/");
+    CHECK(root(false) == "z. groups: mc/ ping/ autoshutdown info stats rescue tx/");
     CHECK(root().size() <= 60);  // the companion's extras take 106 bytes of its 175-byte frame
 }
 

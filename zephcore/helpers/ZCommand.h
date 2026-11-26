@@ -139,6 +139,7 @@ inline constexpr Help kHelp[] = {
 	{"autoshutdown", "get|set 0 or 2900-4200 mV: power off under this battery voltage, 0 off, wakes on recovery; default 0 (companion nRF52: 3200)"},
 	{"info", "get: version, uptime, battery, flash, heap and contacts"},
 	{"stats", "get: MeshCore counters, then the Meshtastic ones"},
+	{"rescue", "get: the copy of identity, settings and regions, and files restored (repeater, room server)"},
 	{"tx.stalls", "get: times TX could not go out for 4 s, per cause"},
 };
 
