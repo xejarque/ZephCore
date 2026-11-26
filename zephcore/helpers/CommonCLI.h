@@ -88,6 +88,11 @@ public:
 	virtual void fillZStats(zinfo::Stats& stats) { (void)stats; }
 	/* "get z.rescue": a server's rescue copy of its identity, prefs and regions. */
 	virtual void formatRescueReply(char* reply, size_t cap) { snprintf(reply, cap, "Error: not available in this role"); }
+	/* Virtual Room Server inside Repeater ("z.room.*") and derived-name advert refresh. */
+	virtual bool handleVRoomCommand(uint32_t sender_timestamp, const char* command, char* reply) {
+		(void)sender_timestamp; (void)command; (void)reply; return false;
+	}
+	virtual void onNodeNameChanged() {}
 	/* "get z.mc.neighbors [page]" and "get z.mt.neighbors [page]": nodes heard directly, best SNR first. */
 	virtual void formatMcNeighbours(char* reply, size_t cap, size_t page, bool recent) { (void)cap; (void)page; (void)recent; strcpy(reply, "not available"); }
 	virtual void formatMtNeighbours(char* reply, size_t cap, size_t page, bool recent) { (void)cap; (void)page; (void)recent; strcpy(reply, "not available"); }

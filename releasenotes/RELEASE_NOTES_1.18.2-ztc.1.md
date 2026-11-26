@@ -221,3 +221,28 @@ wristband every few minutes, which showed up as dropped Bluetooth connections.
   WisBlock slot power on, so a GPS module, slot sensors and display (and on the RAK3401 1W the amplifier's 5 V
   supply) kept running while the node was off. They are now switched off too. MeshCore measured a RAK4631 with
   GPS going from about 30 mA to about 1.3 mA when off.
+
+---
+
+## Virtual Room Server inside Repeater (`CONFIG_ZEPHCORE_REPEATER_ROOM`)
+
+- **A Zephtacore repeater can now host an integrated Room Server** (`CONFIG_ZEPHCORE_REPEATER_ROOM=y`, compiled in by
+  default on Zephtacore repeaters and off on standard repeaters; off at runtime until `set z.room.on on` or enabled in
+  the Web Builder). The node keeps its full repeater identity
+  (`ADV_TYPE_REPEATER`) for discovery, neighbors, route names and forwarding, while announcing a secondary virtual room
+  identity (`ADV_TYPE_ROOM`, persisted in `/lfs/repeater/room.id` with its own `/lfs/repeater/room_acl`, staggered +30 s
+  behind repeater adverts).
+- **Access modes and automatic derived names (`z.room.*`).** `set z.room.access open|readonly|private` controls room
+  access independently of the repeater's `guest.password`: `open` (default, `"<name> Room"`), `readonly` (guest read
+  only, `"<name> Room [RO]"`), and `private` (requires `z.room.password` or the repeater admin password, `"<name> Room [Priv]"`). Changing `z.room.access` or `name` automatically re-advertises the updated room name. Also configurable
+  from the Web Builder (`custom_builder_web/builder.html`). See `docs/CLI_commands.md`.
+- **Changing the access mode applies at once.** `private` removes every client except admins, who log in again with
+  `z.room.password`; `readonly` turns read-write clients into read-only guests; back in `open`, a guest becomes
+  read-write the next time it logs in. The room's client list is saved right away.
+- **Posting to a read-only room now gets an answer.** The virtual room and the room server ACK the post and reply
+  `Error: room is read-only`, so the app stops resending it by flood. Before, the post got no reply at all.
+- **Room posts survive a mesh time-sync step.** When the clock is set forward, the room server and the virtual room
+  move their stored posts and each client's sync point with it, so a client that logs in after the step still
+  receives posts made before it.
+- **Mesh time sync is enabled by default on new nodes.** Freshly provisioned nodes across all roles start with
+  `meshtimesync` on (`set meshtimesync on`), and the Web Flasher automatically sets `time <epoch>` during setup.

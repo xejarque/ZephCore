@@ -46,6 +46,8 @@ public:
 	/* Identity management */
 	bool loadIdentity(mesh::LocalIdentity& id);
 	bool saveIdentity(const mesh::LocalIdentity& id);
+	bool loadRoomIdentity(mesh::LocalIdentity& id);
+	bool saveRoomIdentity(const mesh::LocalIdentity& id);
 
 	/* Prefs management */
 	bool loadPrefs(NodePrefs& prefs);

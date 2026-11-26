@@ -326,6 +326,33 @@
                 <span><strong>Bot de Ping:</strong> Respuesta automática de diagnóstico en canales <code>#bot</code> y <code>Bots</code>.</span>
               </label>
             </div>
+
+            <div id="vroomSection" style="margin-top: 1.25rem; padding-top: 1.15rem; border-top: 1px solid var(--border-subtle);">
+              <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-size:0.92rem;">
+                <input type="checkbox" id="vroomEnable" />
+                <span><strong>Sala Virtual integrada (Room Server):</strong> Añade una sala BBS en el mismo repetidor.</span>
+              </label>
+              <span class="form-hint" style="display:block; margin-top:0.35rem;">
+                El nodo mantiene su identidad y visibilidad normal de repetidor en Discover, vecinos y rutas, y añade un segundo contacto de sala (<code>&lt;nombre&gt; Room</code>).
+              </span>
+
+              <div id="vroomOptions" class="grid-2" style="margin-top: 0.9rem; display: none;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="vroomAccess">Política de Acceso de la Sala</label>
+                  <select id="vroomAccess" class="form-control">
+                    <option value="open" selected>Abierta — cualquiera lee y escribe ("&lt;nombre&gt; Room")</option>
+                    <option value="readonly">Solo lectura pública — escritura con clave ("&lt;nombre&gt; Room [RO]")</option>
+                    <option value="private">Privada — requiere clave de sala o admin ("&lt;nombre&gt; Room [Priv]")</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="vroomPass">Contraseña de Sala (Opcional / Miembros)</label>
+                  <input type="text" id="vroomPass" class="form-control" maxlength="15" placeholder="(Opcional, máx. 15 caracteres)" />
+                  <span class="form-hint">Independiente de la clave de telemetría de invitados del repetidor.</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

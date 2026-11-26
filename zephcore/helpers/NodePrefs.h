@@ -13,6 +13,7 @@
 #include "LoRaConfig.h"
 #include "PingBot.h"
 #include "McFirewall.h"
+#include "VirtualRoom.h"
 #ifdef CONFIG_ZEPHTACORE_MESHTASTIC
 #include "meshtastic/MtConfig.h"
 #endif
@@ -128,7 +129,7 @@ struct NodePrefs {
 	 * their offsets in both legacy layouts; do not reuse. */
 	uint8_t _reserved_apc_enabled;
 	uint8_t _reserved_apc_margin;
-	uint8_t meshtimesync;           // 1 = mesh time-sync clock correction on (default off)
+	uint8_t meshtimesync;           // 1 = mesh time-sync clock correction on (default ON)
 	uint8_t cad_auto;               // 1 = adaptive-CAD staircase acts on probe stats (default ON)
 	int8_t cad_offset;              // operating detPeak offset from family base (CAD_OFFSET_MIN..MAX, -8..+12)
 	uint8_t probe_interval;         // seconds between periodic radio measurements:
@@ -205,6 +206,7 @@ struct NodePrefs {
 	ping::Prefs ping;               // ping bot; prefs.json zc{} ping_*
 	fw::Prefs fw;                   // MeshCore receive limits (repeater); prefs.json zc{} fw_*
 	fw::Prefs mtfw;                 // the same for Meshtastic (repeater); prefs.json zc{} mfw_*
+	vroom::Config vroom;            // virtual room server in repeater; prefs.json z_room{}
 #ifdef CONFIG_ZEPHTACORE_MESHTASTIC
 	/* The Meshtastic side of Zephtacore; prefs.json mt{} (ADR 0013). */
 	mt::RepeaterPrefs mt;
@@ -373,6 +375,7 @@ static inline void sanitizeNodePrefs(NodePrefs* p) {
 	 * restoring the default — left over from when the default was dry-run. */
 	p->cad_auto            = saneBool<uint8_t>(p->cad_auto, 1);
 	ping::sanitize(p->ping);
+	vroom::sanitize(p->vroom);
 	p->allow_read_only     = saneBool<uint8_t>(p->allow_read_only, 0);
 	p->powersaving_enabled = saneBool<uint8_t>(p->powersaving_enabled, POWERSAVING_DEFAULT);
 	p->powersaving_set     = saneBool<uint8_t>(p->powersaving_set, 0);
@@ -486,6 +489,7 @@ static inline void initNodePrefs(NodePrefs* prefs) {
 	prefs->rx_duty_cycle = 0;         // Default OFF — continuous RX for best reliability
 	prefs->_reserved_apc_enabled = 0; // reserved (was APC), see NodePrefs
 	prefs->_reserved_apc_margin = 0;  // reserved (was APC), see NodePrefs
+	prefs->meshtimesync = 1;          // Default ON — mesh time-sync clock correction
 	prefs->cad_auto = 1;              // Default ON — adaptive staircase acts on probe stats
 	prefs->cad_offset = 0;            // Start at family base detPeak (SF+13 on SX126x)
 	prefs->probe_interval = 15;       // floor sample + CAD probe; staircase responds in ~1-2 h
@@ -497,6 +501,7 @@ static inline void initNodePrefs(NodePrefs* prefs) {
 	prefs->v_battery_alert_mv = 0xFFFF; // Sentinel: derive from board auto-shutdown threshold
 	prefs->wifi_enabled = 1;          // as upstream: WiFi still stays off until an SSID is set
 	ping::setDefaults(prefs->ping);   // Default OFF
+	vroom::init(prefs->vroom);        // Default OFF, open access when enabled
 #ifdef CONFIG_ZEPHTACORE_MESHTASTIC
 #ifdef CONFIG_ZEPHTACORE_MT_HOP_LIMIT
 	const uint8_t mt_hops = CONFIG_ZEPHTACORE_MT_HOP_LIMIT;

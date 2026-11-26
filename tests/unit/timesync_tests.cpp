@@ -205,3 +205,11 @@ TEST(timesync_reset, "UNIT-SYNC-014", "Reset discards evidence suppression count
     f.group(6, 1000, 3800, 7400); CHECK(!f.evaluate(7400)); // re-arm pacing
     CHECK(f.evaluate(8300)); // old suppression is gone
 }
+
+TEST(timesync_shift_stamp, "UNIT-SYNC-015", "A clock step moves set stamps, keeps 0 unset and never yields 0") {
+	CHECK(shiftWallStamp(0, 1000) == 0);
+	CHECK(shiftWallStamp(1700000000, 60000000) == 1760000000u);
+	CHECK(shiftWallStamp(100, -100) == 1);
+	CHECK(shiftWallStamp(100, -500) == 1);
+	CHECK(shiftWallStamp(0xFFFFFFF0u, 0) == 0xFFFFFFF0u);
+}

@@ -312,6 +312,21 @@ public:
 	explicit RoomJson(NodePrefs *p) : _p(p) {}
 };
 
+class VRoomJson : public ConfigSerializer {
+	NodePrefs *_p;
+
+protected:
+	void structure() override
+	{
+		def("enabled", _p->vroom.enabled);
+		def("access", _p->vroom.access);
+		def("pass", _p->vroom.password, sizeof(_p->vroom.password));
+	}
+
+public:
+	explicit VRoomJson(NodePrefs *p) : _p(p) {}
+};
+
 class PowerJson : public ConfigSerializer {
 	NodePrefs *_p;
 
@@ -351,6 +366,7 @@ class ServerJson : public ConfigSerializer {
 	GpsJson _gps;
 	RepeatJson _repeat;
 	RoomJson _room;
+	VRoomJson _vroom;
 	PowerJson _power;
 	ZcServerJson _zc;
 #ifdef CONFIG_ZEPHTACORE_MESHTASTIC
@@ -372,6 +388,7 @@ protected:
 		def("gps", _gps);
 		def("repeat", _repeat);
 		def("room", _room);
+		def("z_room", _vroom);
 		def("power", _power);
 		def("zc", _zc);
 #ifdef CONFIG_ZEPHTACORE_MESHTASTIC
@@ -381,7 +398,7 @@ protected:
 
 public:
 	explicit ServerJson(NodePrefs *p)
-		: _p(p), _radio(p), _gps(p), _repeat(p), _room(p), _power(p), _zc(p)
+		: _p(p), _radio(p), _gps(p), _repeat(p), _room(p), _vroom(p), _power(p), _zc(p)
 #ifdef CONFIG_ZEPHTACORE_MESHTASTIC
 		, _mt(p)
 #endif

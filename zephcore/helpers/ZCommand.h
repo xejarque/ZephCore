@@ -141,20 +141,34 @@ inline constexpr Help kHelp[] = {
 	{"stats", "get: MeshCore counters, then the Meshtastic ones"},
 	{"rescue", "get: the copy of identity, settings and regions, and files restored (repeater, room server)"},
 	{"tx.stalls", "get: times TX could not go out for 4 s, per cause"},
+#ifdef CONFIG_ZEPHCORE_REPEATER_ROOM
+	{"room.on", "get|set on|off|1|0: virtual Room Server in repeater, default off"},
+	{"room.access", "get|set open|readonly|private: room access policy, default open"},
+	{"room.password", "get|set <pass>|clear: room member write password (1-15 chars), default none", true},
+	{"room.post", "set <text>: post a system message to the virtual room", true},
+	{"room.advert", "set [flood]: send a virtual room advertisement now"},
+	{"room.acl", "get: list virtual room ACL entries"},
+#endif
 };
 
 inline constexpr size_t kHelpCount = sizeof(kHelp) / sizeof(kHelp[0]);
 
-/* The Meshtastic keys exist only in builds that have it. */
-inline bool helpListed(const Help &h, bool meshtastic)
+/* The Meshtastic and virtual-room keys exist only in builds that enable them. */
+inline bool helpListed(const Help &h, bool meshtastic, bool vroom = false)
 {
-	return meshtastic || strncmp(h.key, "mt.", 3) != 0;
+	if (!meshtastic && strncmp(h.key, "mt.", 3) == 0) {
+		return false;
+	}
+	if (!vroom && strncmp(h.key, "room.", 5) == 0) {
+		return false;
+	}
+	return true;
 }
 
 /* Whether h is listed under the group key[0..n), n 0 for the root (every listed key). */
-inline bool underGroup(const Help &h, bool meshtastic, const char *key, size_t n)
+inline bool underGroup(const Help &h, bool meshtastic, const char *key, size_t n, bool vroom = false)
 {
-	if (!helpListed(h, meshtastic)) {
+	if (!helpListed(h, meshtastic, vroom)) {
 		return false;
 	}
 	return n == 0 || (strncmp(h.key, key, n) == 0 && h.key[n] == '.');
@@ -177,10 +191,10 @@ inline size_t wordLen(const char *s)
 	return n;
 }
 
-inline bool hasKeysUnder(const char *key, size_t n, bool meshtastic)
+inline bool hasKeysUnder(const char *key, size_t n, bool meshtastic, bool vroom = false)
 {
 	for (const Help &h : kHelp) {
-		if (underGroup(h, meshtastic, key, n)) {
+		if (underGroup(h, meshtastic, key, n, vroom)) {
 			return true;
 		}
 	}
@@ -197,12 +211,12 @@ inline size_t written(int n, size_t cap)
  * word once, in table order, with "/" after one that has children. lead goes before the first word.
  * Stops before a word that does not fit; returns the bytes used. */
 inline size_t appendChildren(char *reply, size_t cap, size_t used, const char *key, size_t n,
-			     bool meshtastic, const char *lead)
+			     bool meshtastic, const char *lead, bool vroom = false)
 {
 	bool first = true;
 
 	for (size_t i = 0; i < kHelpCount; i++) {
-		if (!underGroup(kHelp[i], meshtastic, key, n)) {
+		if (!underGroup(kHelp[i], meshtastic, key, n, vroom)) {
 			continue;
 		}
 		const char *child = childOf(kHelp[i], n);
@@ -211,7 +225,7 @@ inline size_t appendChildren(char *reply, size_t cap, size_t used, const char *k
 		bool more = false;
 
 		for (size_t j = 0; j < kHelpCount; j++) {
-			if (!underGroup(kHelp[j], meshtastic, key, n)) {
+			if (!underGroup(kHelp[j], meshtastic, key, n, vroom)) {
 				continue;
 			}
 			const char *other = childOf(kHelp[j], n);
@@ -240,16 +254,17 @@ inline size_t appendChildren(char *reply, size_t cap, size_t used, const char *k
 
 /* "help" or "?" at the top: the groups of z., and what each one holds, written after lead at used.
  * Returns the bytes used. */
-inline size_t appendGroups(char *reply, size_t cap, size_t used, const char *lead, bool meshtastic)
+inline size_t appendGroups(char *reply, size_t cap, size_t used, const char *lead, bool meshtastic,
+			   bool vroom = false)
 {
 	used += written(snprintf(reply + used, cap - used, "%sz. groups:", lead), cap - used);
-	return appendChildren(reply, cap, used, "", 0, meshtastic, "");
+	return appendChildren(reply, cap, used, "", 0, meshtastic, "", vroom);
 }
 
 /* "<get|set> z.<key> help": the usage of a key, or the children of a group ("get z.mt help").
  * False, with reply untouched, when the command is not that, so it goes on to its own handler.
  * "set" leaves a key that takes any text alone: "help" is a valid value for it. */
-inline bool helpReply(const char *command, bool meshtastic, char *reply, size_t cap)
+inline bool helpReply(const char *command, bool meshtastic, char *reply, size_t cap, bool vroom = false)
 {
 	const Parsed parsed = parse(command);
 
@@ -275,24 +290,24 @@ inline bool helpReply(const char *command, bool meshtastic, char *reply, size_t 
 	}
 
 	for (const Help &h : kHelp) {
-		if (helpListed(h, meshtastic) && strlen(h.key) == n && strncmp(h.key, key, n) == 0) {
+		if (helpListed(h, meshtastic, vroom) && strlen(h.key) == n && strncmp(h.key, key, n) == 0) {
 			if (!get && h.free_text) {
 				return false;
 			}
 			size_t used = written(snprintf(reply, cap, "> z.%s: %s", h.key, h.text), cap);
 
-			if (hasKeysUnder(h.key, n, meshtastic)) {
-				appendChildren(reply, cap, used, h.key, n, meshtastic, " | more:");
+			if (hasKeysUnder(h.key, n, meshtastic, vroom)) {
+				appendChildren(reply, cap, used, h.key, n, meshtastic, " | more:", vroom);
 			}
 			return true;
 		}
 	}
-	if (!hasKeysUnder(key, n, meshtastic)) {
+	if (!hasKeysUnder(key, n, meshtastic, vroom)) {
 		return false;
 	}
 	const size_t used = written(snprintf(reply, cap, "> z.%.*s:", (int)n, key), cap);
 
-	appendChildren(reply, cap, used, key, n, meshtastic, "");
+	appendChildren(reply, cap, used, key, n, meshtastic, "", vroom);
 	return true;
 }
 

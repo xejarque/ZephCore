@@ -87,6 +87,29 @@ struct NeighbourInfo {
   #endif
 #endif
 
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+#if !defined(MAX_UNSYNCED_POSTS) && defined(CONFIG_ZEPHCORE_MAX_UNSYNCED_POSTS)
+  #define MAX_UNSYNCED_POSTS  CONFIG_ZEPHCORE_MAX_UNSYNCED_POSTS
+#endif
+#ifndef MAX_UNSYNCED_POSTS
+  #define MAX_UNSYNCED_POSTS  32
+#endif
+#ifndef MAX_POST_TEXT_LEN
+  #define MAX_POST_TEXT_LEN   (160 - 9)
+#endif
+struct RoomPostInfo {
+  mesh::Identity author;
+  uint32_t post_timestamp;
+  char text[MAX_POST_TEXT_LEN + 1];
+
+  void clear() {
+    author = mesh::Identity();
+    post_timestamp = 0;
+    memset(text, 0, sizeof(text));
+  }
+};
+#endif
+
 class RepeaterMesh : public mesh::Mesh, public CommonCLICallbacks {
   // ZEPHCORE: our board handle and datastore instead of FILESYSTEM* _fs.
   mesh::MainBoard& _board;
@@ -184,6 +207,40 @@ class RepeaterMesh : public mesh::Mesh, public CommonCLICallbacks {
   // thread in maintenanceLoop().
   atomic_t _uplink_connect_pending;
 #endif
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  mesh::LocalIdentity _room_id;
+  bool _room_id_loaded;
+  ClientACL _room_acl{"/room_acl"};
+  int _room_matching_peers[MAX_CLIENTS];
+  RoomPostInfo _room_posts[MAX_UNSYNCED_POSTS];
+  int _room_next_post_idx;
+  int _room_next_client_idx;
+  unsigned long _room_next_push;
+  unsigned long _room_dirty_acl_expiry;
+  unsigned long _room_next_local_advert;
+  unsigned long _room_next_flood_advert;
+  uint16_t _room_num_posted;
+  uint16_t _room_num_post_pushes;
+  RateLimiter _room_login_fail_limiter;
+
+  void roomBegin();
+  bool roomEnsureIdentity();
+  void roomLoadAcl();
+  void roomSaveAcl();
+  void roomLoop();
+  uint32_t roomMsUntilNextMaintenance();
+  void roomTimeSyncShift(int64_t delta);
+  mesh::Packet* roomCreateSelfAdvert();
+  void roomSendSelfAdvert(int delay_millis, bool flood);
+  void roomScheduleStaggeredAdvert(bool flood);
+  void roomOnAccessChanged();
+  void roomAddPost(const mesh::Identity& author, const char* postData);
+  void roomPushPostToClient(ClientInfo* client, RoomPostInfo& post);
+  uint8_t roomGetUnsyncedCount(ClientInfo* client) const;
+  bool roomProcessAck(const uint8_t* data);
+  int roomHandleRequest(ClientInfo* sender, uint32_t sender_timestamp, uint8_t* payload, size_t payload_len);
+  bool roomHandleCommand(uint32_t sender_timestamp, const char* command, char* reply);
+#endif
 
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);
   uint8_t handleLoginReq(const mesh::Identity& sender, const uint8_t* secret, uint32_t sender_timestamp, const uint8_t* data, bool is_flood);
@@ -263,6 +320,17 @@ protected:
   void onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender_idx, const uint8_t* secret, uint8_t* data, size_t len) override;
   bool onPeerPathRecv(mesh::Packet* packet, int sender_idx, const uint8_t* secret, uint8_t* path, uint8_t path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) override;
   void onControlDataRecv(mesh::Packet* packet) override;
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  const mesh::LocalIdentity* getSecondaryIdentity() const override {
+    return (_prefs.vroom.enabled && _room_id_loaded) ? &_room_id : nullptr;
+  }
+  int searchSecondaryPeersByHash(const uint8_t* hash) override;
+  void getSecondaryPeerSharedSecret(uint8_t* dest_secret, int peer_idx) override;
+  void onSecondaryPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender_idx, const uint8_t* secret, uint8_t* data, size_t len) override;
+  bool onSecondaryPeerPathRecv(mesh::Packet* packet, int sender_idx, const uint8_t* secret, uint8_t* path, uint8_t path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) override;
+  void onSecondaryAnonDataRecv(mesh::Packet* packet, const uint8_t* secret, const mesh::Identity& sender, uint8_t* data, size_t len) override;
+  void onAckRecv(mesh::Packet* packet, uint32_t ack_crc) override;
+#endif
 
   void sendFloodReply(mesh::Packet* packet, unsigned long delay_millis, uint8_t path_hash_size);
 
@@ -307,6 +375,16 @@ public:
   void applyTempRadioParams(float freq, float bw, uint8_t sf, uint8_t cr, int timeout_mins) override;
   bool formatFileSystem() override;
   void formatRescueReply(char* reply, size_t cap) override { _store->formatRescueReply(reply, cap); }
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  bool handleVRoomCommand(uint32_t sender_timestamp, const char* command, char* reply) override {
+    return roomHandleCommand(sender_timestamp, command, reply);
+  }
+  void onNodeNameChanged() override {
+    if (_prefs.vroom.enabled && _room_id_loaded) {
+      roomSendSelfAdvert(2000, true);
+    }
+  }
+#endif
   void sendSelfAdvertisement(int delay_millis, bool flood) override;
   void updateAdvertTimer() override;
   void updateFloodAdvertTimer() override;

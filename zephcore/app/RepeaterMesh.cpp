@@ -1060,6 +1060,21 @@ void RepeaterMesh::onControlDataRecv(mesh::Packet* packet) {
         sendZeroHop(resp, getRetransmitDelay(resp)*4);  // apply random delay (widened x4), as multiple nodes can respond to this
       }
     }
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+    if (_prefs.vroom.enabled && _room_id_loaded &&
+        (filter & (1 << ADV_TYPE_ROOM)) != 0 && _prefs.discovery_mod_timestamp >= since) {
+      bool prefix_only = packet->payload[0] & 1;
+      uint8_t data[6 + PUB_KEY_SIZE];
+      data[0] = CTL_TYPE_NODE_DISCOVER_RESP | ADV_TYPE_ROOM;
+      data[1] = packet->_snr;
+      memcpy(&data[2], &tag, 4);
+      memcpy(&data[6], _room_id.pub_key, PUB_KEY_SIZE);
+      auto resp = createControlData(data, prefix_only ? 6 + 8 : 6 + PUB_KEY_SIZE);
+      if (resp) {
+        sendZeroHop(resp, getRetransmitDelay(resp) * 4 + 250);
+      }
+    }
+#endif
   } else if (type == CTL_TYPE_NODE_DISCOVER_RESP && packet->payload_len >= 6) {
     uint8_t node_type = packet->payload[0] & 0x0F;
     if (node_type != ADV_TYPE_REPEATER) {
@@ -1119,7 +1134,11 @@ RepeaterMesh::RepeaterMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::Mil
      * (not per-sender) — trade-off documented in CRYPTO_AUDIT_INDEX.md
      * Phase 4 (mitigation for upstream MeshCore#2556). */
     login_fail_limiter(4, 180),
-    telemetry(MAX_PACKET_PAYLOAD - 4) {
+    telemetry(MAX_PACKET_PAYLOAD - 4)
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+    , _room_login_fail_limiter(4, 180)
+#endif
+{
 
   _store = nullptr;
   last_millis = 0;
@@ -1163,6 +1182,17 @@ RepeaterMesh::RepeaterMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::Mil
   _uplink_last_raw_len = 0;
   _uplink_next_status_at = 0;
   atomic_set(&_uplink_connect_pending, 0);
+#endif
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  _room_id_loaded = false;
+  _room_next_post_idx = 0;
+  _room_next_client_idx = 0;
+  _room_next_push = 0;
+  _room_dirty_acl_expiry = 0;
+  _room_next_local_advert = 0;
+  _room_next_flood_advert = 0;
+  _room_num_posted = 0;
+  _room_num_post_pushes = 0;
 #endif
 }
 
@@ -1209,6 +1239,10 @@ void RepeaterMesh::begin(RepeaterDataStore* store) {
   updateFloodAdvertTimer();
 
   _board.setAdcMultiplier(_prefs.adc_multiplier);
+
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  roomBegin();
+#endif
 
   LOG_INF("RepeaterMesh started: %s (freq=%.2f bw=%.0f sf=%d cr=%d)",
     _prefs.node_name, (double)_prefs.freq, (double)_prefs.bw, _prefs.sf, _prefs.cr);
@@ -1597,10 +1631,16 @@ void RepeaterMesh::loop() {
     if (pkt) sendFloodScoped(default_scope, pkt, (uint32_t)0, _prefs.path_hash_mode + 1);
     updateFloodAdvertTimer();
     updateAdvertTimer();
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+    roomScheduleStaggeredAdvert(true);
+#endif
   } else if (next_local_advert && millisHasNowPassed(next_local_advert)) {
     mesh::Packet* pkt = createSelfAdvert();
     if (pkt) sendZeroHop(pkt);
     updateAdvertTimer();
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+    roomScheduleStaggeredAdvert(false);
+#endif
   }
 
   if (set_radio_at && millisHasNowPassed(set_radio_at)) {
@@ -1638,6 +1678,9 @@ void RepeaterMesh::loop() {
 
 #if IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC)
   mtTick();
+#endif
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  roomLoop();
 #endif
   timeSyncTick();
 
@@ -1773,6 +1816,10 @@ uint32_t RepeaterMesh::msUntilNextMaintenance() {
         next, _timesync.msUntilNextEval((uint32_t)(k_uptime_get() / 1000)));
   }
 
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  next = mesh::maintenanceSooner(next, roomMsUntilNextMaintenance());
+#endif
+
   return next;
 }
 
@@ -1802,4 +1849,7 @@ void RepeaterMesh::timeSyncTick() {
   discover_limiter.reset();
   anon_limiter.reset();
   login_fail_limiter.reset();
+#if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_ROOM)
+  roomTimeSyncShift(delta);
+#endif
 }

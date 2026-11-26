@@ -127,6 +127,20 @@ bool RepeaterDataStore::saveIdentity(const mesh::LocalIdentity& id) {
 	return zephcore_identity_save(path, id);
 }
 
+bool RepeaterDataStore::loadRoomIdentity(mesh::LocalIdentity& id) {
+	char path[48];
+	snprintf(path, sizeof(path), "%s/room.id", BASE_PATH);
+	return zephcore_identity_load(path, id);
+}
+
+bool RepeaterDataStore::saveRoomIdentity(const mesh::LocalIdentity& id) {
+	if (!_initialized) begin();
+
+	char path[48];
+	snprintf(path, sizeof(path), "%s/room.id", BASE_PATH);
+	return zephcore_identity_save(path, id);
+}
+
 bool RepeaterDataStore::loadPrefs(NodePrefs& prefs) {
 	char path[48];
 	snprintf(path, sizeof(path), "%s/prefs.json", BASE_PATH);

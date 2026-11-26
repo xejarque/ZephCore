@@ -40,6 +40,16 @@
 	#define FIRMWARE_BUILD_EPOCH 0u
 #endif
 
+/* Moves an RTC-seconds stamp with a clock step; 0 (unset) stays 0. */
+inline uint32_t shiftWallStamp(uint32_t stamp, int64_t delta)
+{
+	if (stamp == 0) {
+		return 0;
+	}
+	int64_t shifted = (int64_t)stamp + delta;
+	return (shifted > 0) ? (uint32_t)shifted : 1;
+}
+
 class MeshTimeSync {
 public:
 	static constexpr uint8_t  HOP_CAP                  = 3;

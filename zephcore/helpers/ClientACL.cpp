@@ -17,11 +17,11 @@ static File openWrite(FILESYSTEM* _fs, const char* filename) {
 void ClientACL::load(FILESYSTEM* fs, const mesh::LocalIdentity& self_id) {
   _fs = fs;
   num_clients = 0;
-  if (_fs->exists(ACL_FILE)) {
+  if (_fs->exists(_filename)) {  // ZEPHCORE: was ACL_FILE
   #if defined(RP2040_PLATFORM)
-    File file = _fs->open(ACL_FILE, "r");
+    File file = _fs->open(_filename, "r");  // ZEPHCORE: was ACL_FILE
   #else
-    File file = _fs->open(ACL_FILE);
+    File file = _fs->open(_filename);  // ZEPHCORE: was ACL_FILE
   #endif
     if (file) {
       bool full = false;
@@ -64,7 +64,7 @@ void ClientACL::load(FILESYSTEM* fs, const mesh::LocalIdentity& self_id) {
 
 void ClientACL::save(FILESYSTEM* fs, bool (*filter)(ClientInfo*)) {
   _fs = fs;
-  File file = openWrite(_fs, ACL_FILE);
+  File file = openWrite(_fs, _filename);  // ZEPHCORE: was ACL_FILE
   if (file) {
     uint8_t unused[2];
     memset(unused, 0, sizeof(unused));
@@ -89,8 +89,8 @@ void ClientACL::save(FILESYSTEM* fs, bool (*filter)(ClientInfo*)) {
 
 bool ClientACL::clear() {
   if (!_fs) return false; // no filesystem, nothing to clear
-  if (_fs->exists(ACL_FILE)) {
-    _fs->remove(ACL_FILE);
+  if (_fs->exists(_filename)) {  // ZEPHCORE: was ACL_FILE
+    _fs->remove(_filename);  // ZEPHCORE: was ACL_FILE
   }
   for (int i = 0; i < MAX_CLIENTS; i++) clients[i].clear();  // ZEPHCORE: was memset
   num_clients = 0;
