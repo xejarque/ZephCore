@@ -96,7 +96,8 @@ El arnés de host no compila `app/` ni `CommonCLI.cpp` (QA-3): el cableado se ve
 
 - Arranque de la NVS sobre bytes de otro firmware: el companion documenta un cuelgue (`formatNVSOnly`). Si B9 se
   cuelga en vez de fallar, el borrado por fallo de arranque no basta y hay que rediseñar ese punto.
-- `zephcore_prefs_json_load` rechaza un fichero truncado.
+- ~~`zephcore_prefs_json_load` rechaza un fichero truncado.~~ Sí: rechaza el vacío y el parser cualquier corte, ceros
+  o flash borrada (UNIT-PJSON-017).
 - Coste en flash y RAM de enlazar settings en el repetidor.
 
 ## DMAR

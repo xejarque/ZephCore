@@ -382,3 +382,19 @@ TEST(pjson_server_autoshutdown, "UNIT-PJSON-014", "A repeater's auto-shutdown th
     CHECK(serverPrefsFromJson(d, old_file));
     CHECK(d.auto_shutdown_mv == def_mv);
 }
+
+TEST(pjson_damaged, "UNIT-PJSON-017", "A server prefs.json cut at any byte, zeroed or reading as erased flash is refused and changes nothing") {
+    MemStream whole;
+    CHECK(serverPrefsToJson(sample(), whole));
+    const std::string json = whole.data;
+    const NodePrefs before = defaults();
+    std::vector<std::string> damaged = {std::string(json.size(), '\0'), std::string(json.size(), '\xff')};
+    for (size_t length = 1; length < json.size(); length++) damaged.push_back(json.substr(0, length));
+    for (const std::string &bytes : damaged) {
+        NodePrefs p = before;
+        MemStream in(bytes);
+        CHECK(!serverPrefsFromJson(p, in));
+        CHECK(serverBytes(p) == serverBytes(before));
+    }
+}
+

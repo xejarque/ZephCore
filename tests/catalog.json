@@ -358,6 +358,11 @@
       "source": "tests/unit/prefs_json_tests.cpp"
     },
     {
+      "id": "UNIT-PJSON-017",
+      "name": "A server prefs.json cut at any byte, zeroed or reading as erased flash is refused and changes nothing",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
       "id": "UNIT-LPP-001",
       "name": "Values round to the nearest step (3850 mV is 3.85 V, not the library's 3.84)",
       "source": "tests/unit/lpp_tests.cpp"
