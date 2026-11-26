@@ -99,8 +99,8 @@ Contra `f6d8e4f9`, sin avisos nuevos.
 | Build | Flash | RAM | Copia |
 | --- | --- | --- | --- |
 | `rak4631` repetidor | +8004 B (312400) | +1152 B (88292) | sí |
-| `rak4631` room server | +8008 B (285468) | +1152 B (86436) | sí |
-| `heltec_wifi_lora32_v3` repetidor | irom +8272 B, drom +464 B | dram +1184 B | sí |
+| `rak4631` room server | +8024 B (285484) | +1152 B (86436) | sí |
+| `heltec_wifi_lora32_v3` repetidor | irom +8288 B, drom +464 B | dram +1184 B | sí |
 | `rak4631` companion | +188 B (CLI común) | 0 | no |
 | `gat562_30s` repetidor | 315436 B | 89060 B | sí |
 | `xiao_nrf54l15` repetidor, `rak4631` KISS, `xiao_esp32s3` observer | solo compilados | | no |
@@ -124,6 +124,9 @@ commit, que ensucia las particiones y reinicia tras una escritura concreta.
 | B10 | Pasa: room server conserva, companion borra. |
 
 ESP32 sin probar en hardware.
+
+Tras la revisión de código (carga de ficheros solo cuando difieren de la copia) se repitieron en el banco los
+cambios por comando, el reinicio durante la escritura, el borrado total y la basura en la NVS: pasan.
 
 ## DMAR
 
