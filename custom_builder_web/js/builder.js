@@ -20,12 +20,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const mtOpaqueCheck = document.getElementById("mtOpaque");
   const mtHopsInput = document.getElementById("mtHops");
   const pingBotCheck = document.getElementById("pingBot");
-  const firewallCheck = document.getElementById("firewallEnable");
   const vroomSection = document.getElementById("vroomSection");
   const vroomEnableCheck = document.getElementById("vroomEnable");
   const vroomOptions = document.getElementById("vroomOptions");
   const vroomAccessSelect = document.getElementById("vroomAccess");
   const vroomPassInput = document.getElementById("vroomPass");
+  const autoShutdownSection = document.getElementById("autoShutdownSection");
+  const autoShutdownCheck = document.getElementById("autoShutdownEnable");
+  const autoShutdownOptions = document.getElementById("autoShutdownOptions");
+  const autoShutdownInput = document.getElementById("autoShutdownMv");
+  const autoShutdownHint = document.getElementById("autoShutdownHint");
 
   // Custom Identity Elements
   const nodeNameInput = document.getElementById("nodeNameInput");
@@ -35,7 +39,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const guestPassInput = document.getElementById("guestPassInput");
   const nodeLatInput = document.getElementById("nodeLatInput");
   const nodeLonInput = document.getElementById("nodeLonInput");
-  const nodeAltInput = document.getElementById("nodeAltInput");
   const gpsModeSelect = document.getElementById("gpsMode");
   const btnGeolocate = document.getElementById("btnGeolocate");
   const btnClearLocation = document.getElementById("btnClearLocation");
@@ -43,7 +46,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Primary Action Button
   const btnFlashAndApply = document.getElementById("btnFlashAndApply");
-  const btnDownloadPrefs = document.getElementById("btnDownloadPrefs");
 
   // Dev Cloud & West Elements
   const westCommandPre = document.getElementById("westCommand");
@@ -162,8 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
       guestPass: guestPassInput ? guestPassInput.value.trim() : "",
       lat: nodeLatInput ? nodeLatInput.value.trim() : "",
       lon: nodeLonInput ? nodeLonInput.value.trim() : "",
-      alt: nodeAltInput ? nodeAltInput.value.trim() : "0",
-      gpsMode: gpsModeSelect ? gpsModeSelect.value : "ENABLED",
+      gps: gpsModeSelect ? gpsModeSelect.value : "",
       freq: freqInput ? freqInput.value : "869.618",
       bw: bwSelect ? bwSelect.value : "62.5",
       sf: sfSlider ? sfSlider.value : "7",
@@ -173,10 +174,11 @@ document.addEventListener("DOMContentLoaded", () => {
       mtOpaque: mtOpaqueCheck ? mtOpaqueCheck.checked : true,
       mtHops: mtHopsInput ? mtHopsInput.value : "7",
       pingBot: pingBotCheck ? pingBotCheck.checked : false,
-      firewall: firewallCheck ? firewallCheck.checked : true,
       vroomEnable: selectedRole.id === "repeater" && vroomEnableCheck ? vroomEnableCheck.checked : false,
       vroomAccess: vroomAccessSelect ? vroomAccessSelect.value : "open",
       vroomPass: vroomPassInput ? vroomPassInput.value.trim() : "",
+      autoShutdownMv: offersAutoShutdown() && autoShutdownCheck && autoShutdownCheck.checked && autoShutdownInput
+        ? autoShutdownInput.value.trim() : "",
       timestamp: new Date().toISOString()
     };
   }
@@ -199,8 +201,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Repeaters on a board whose battery wakes it again.
+  function offersAutoShutdown() {
+    return selectedRole.id === "repeater" && Boolean(selectedBoard.batteryWake);
+  }
+
+  function syncAutoShutdown() {
+    if (!autoShutdownSection || !autoShutdownInput) return;
+    const offered = offersAutoShutdown();
+    autoShutdownSection.style.display = offered ? "" : "none";
+    autoShutdownOptions.style.display = offered && autoShutdownCheck.checked ? "" : "none";
+    if (!offered) return;
+    const { maxMv, suggestedMv } = selectedBoard.batteryWake;
+    // A new board brings its own range and suggestion.
+    if (autoShutdownInput.dataset.board !== selectedBoard.id) {
+      autoShutdownInput.dataset.board = selectedBoard.id;
+      autoShutdownInput.max = maxMv;
+      autoShutdownInput.value = suggestedMv;
+    }
+    autoShutdownHint.textContent = `Entre 2900 y ${maxMv} mV en esta placa.`;
+  }
+
   function updateOutputs() {
     syncVroomVisibility();
+    syncAutoShutdown();
     saveCurrentConfig();
 
     const roleName = selectedRole.id;
@@ -226,49 +250,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Download Prefs.json Backup
-  if (btnDownloadPrefs) {
-    btnDownloadPrefs.addEventListener("click", () => {
-      const cfg = getCurrentConfig();
-      const prefs = {
-        name: cfg.name,
-        password: cfg.adminPass,
-        guest_password: cfg.guestPass,
-        lat: cfg.lat ? parseFloat(cfg.lat) : 0.0,
-        lon: cfg.lon ? parseFloat(cfg.lon) : 0.0,
-        alt: cfg.alt ? parseInt(cfg.alt, 10) : 0,
-        gps_mode: cfg.gpsMode,
-        mt: {
-          enable: true,
-          role: cfg.role === "repeater" ? "client_base" : "client_mute",
-          relay: cfg.mtRelay,
-          opaque: cfg.mtOpaque,
-          hops: parseInt(cfg.mtHops, 10),
-          ping: cfg.pingBot
-        },
-        radio: {
-          freq: parseFloat(cfg.freq),
-          bw: parseFloat(cfg.bw),
-          sf: parseInt(cfg.sf, 10),
-          cr: parseInt(cfg.cr, 10),
-          tx_power: parseInt(cfg.txPower, 10)
-        },
-        ...(cfg.role === "repeater" ? {
-          z_room: {
-            enabled: cfg.vroomEnable ? 1 : 0,
-            access: cfg.vroomAccess === "readonly" ? 1 : (cfg.vroomAccess === "private" ? 2 : 0),
-            pass: cfg.vroomPass || ""
-          }
-        } : {})
-      };
-      const blob = new Blob([JSON.stringify(prefs, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `zephtacore_${cfg.name.replace(/\s+/g, "_")}_prefs.json`;
-      a.click();
-    });
-  }
-
   // Copy West Command
   if (btnCopyWest) {
     btnCopyWest.addEventListener("click", () => {
@@ -286,13 +267,13 @@ document.addEventListener("DOMContentLoaded", () => {
     btnDownloadConf.addEventListener("click", () => {
       const cfg = getCurrentConfig();
       const conf = `# Zephtacore custom Kconfig
-# Name, radio preset, position and GPS are not build options: set them after
-# flashing with the CLI or restore them from the prefs.json backup.
+# Name, radio preset, position, GPS, the virtual room and auto-shutdown are not
+# build options: set them after flashing, over USB.
 CONFIG_ZEPHTACORE_MESHTASTIC=y
 CONFIG_ZEPHTACORE_MT_HOP_LIMIT=${cfg.mtHops}
 CONFIG_ZEPHCORE_DEFAULT_TX_POWER_DBM=${cfg.txPower}
 CONFIG_ZEPHCORE_ADMIN_PASSWORD=${kconfigString(cfg.adminPass)}
-${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)}\n` : ""}${cfg.role === "repeater" && cfg.vroomEnable ? "CONFIG_ZEPHCORE_REPEATER_ROOM=y\n" : ""}`;
+${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)}\n` : ""}`;
 
       const blob = new Blob([conf], { type: "text/plain" });
       const a = document.createElement("a");
@@ -339,10 +320,9 @@ ${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)
 
   [
     sfSlider, bwSelect, crSelect, freqInput, txPowerInput,
-    mtRelaySelect, mtOpaqueCheck, mtHopsInput, pingBotCheck, firewallCheck,
-    vroomEnableCheck, vroomAccessSelect, vroomPassInput,
-    nodeNameInput, adminPassInput, guestPassInput, nodeLatInput, nodeLonInput,
-    nodeAltInput, gpsModeSelect
+    mtRelaySelect, mtOpaqueCheck, mtHopsInput, pingBotCheck,
+    vroomEnableCheck, vroomAccessSelect, vroomPassInput, autoShutdownCheck, autoShutdownInput,
+    nodeNameInput, adminPassInput, guestPassInput, nodeLatInput, nodeLonInput, gpsModeSelect
   ].forEach((el) => {
     if (el) {
       el.addEventListener("input", updateOutputs);
@@ -506,7 +486,6 @@ ${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)
     btnClearLocation.addEventListener("click", () => {
       if (nodeLatInput) nodeLatInput.value = "";
       if (nodeLonInput) nodeLonInput.value = "";
-      if (nodeAltInput) nodeAltInput.value = "0";
       if (map && mapMarker) {
         map.removeLayer(mapMarker);
         mapMarker = null;

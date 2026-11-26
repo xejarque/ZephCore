@@ -30,7 +30,9 @@
 
     return [
       `set name ${cfg.name}`,
-      cfg.adminPass ? `password ${cfg.adminPass}` : null,
+      // A companion has no admin login and refuses the command.
+      cfg.adminPass && cfg.role !== "companion" ? `password ${cfg.adminPass}` : null,
+      cfg.guestPass && cfg.role !== "companion" ? `set guest.password ${cfg.guestPass}` : null,
       `set radio ${cfg.freq},${cfg.bw},${cfg.sf},${cr}`,
       `set tx ${cfg.txPower}`,
       `set z.mt.enable on`,
@@ -43,9 +45,20 @@
       cfg.role === "repeater" && cfg.vroomEnable ? `set z.room.on on` : null,
       cfg.lat ? `set lat ${cfg.lat}` : null,
       cfg.lon ? `set lon ${cfg.lon}` : null,
+      cfg.autoShutdownMv ? `set z.autoshutdown ${cfg.autoShutdownMv}` : null,
       Number.isInteger(nowEpoch) && nowEpoch > 0 ? `time ${nowEpoch}` : null,
+      // A board without GPS refuses it, which stops the send: everything else is applied by then.
+      cfg.gps ? `gps ${cfg.gps}` : null,
       `reboot`
     ].filter(Boolean);
+  }
+
+  const SECRET_COMMAND = /^(password|set guest\.password|set z\.room\.password) /;
+
+  // What may be shown of a command that carries a password; "" when it carries none.
+  function maskedCommand(cmd) {
+    const m = SECRET_COMMAND.exec(cmd);
+    return m ? `${m[1]} ••••` : "";
   }
 
   function newestVersion(versions) {
@@ -89,9 +102,18 @@
     return `'${String(value).replace(/'/g, "'\\''")}'`;
   }
 
-  // The CLI answers a refused command with "Error: ..." or "ERR ..." (observer), maybe after "> ".
-  function isErrorReply(text) {
-    return /^[>\s]*(Error|ERR)\b/im.test(text || "");
+  // A node echoes the command and answers "  -> <reply>", ended by CR LF; the lines inside a reply
+  // end with LF alone. The reply received so far, or null while none has arrived.
+  function nodeReply(received) {
+    const mark = /(?:^|\n)[ \t]*-> /.exec(received || "");
+    if (!mark) return null;
+    return received.slice(mark.index + mark[0].length).split("\r\n")[0].trim();
+  }
+
+  // A refused command. "(ERR: clock cannot go backwards)" is left out: the node's clock is already ahead.
+  const REFUSED = /^(?:> )?(?:(?:error|err)\b|unknown (?:command|config)\b|\?\?:|gps toggle not found)/i;
+  function isErrorReply(reply) {
+    return REFUSED.test(reply || "");
   }
 
   // True when the catalog gives no sha256 for a file or its bytes have that SHA-256.
@@ -103,7 +125,7 @@
     return hex === String(expected).toLowerCase();
   }
 
-  const api = { isErrorReply, sha256Matches, firmwareCodingRate, buildConfigCommands, catalogFiles, findCatalogFile, formatterUrl, kconfigString, shellQuote };
+  const api = { nodeReply, isErrorReply, maskedCommand, sha256Matches, firmwareCodingRate, buildConfigCommands, catalogFiles, findCatalogFile, formatterUrl, kconfigString, shellQuote };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.ZephtacoreLogic = api;
 })(typeof window !== "undefined" ? window : globalThis);

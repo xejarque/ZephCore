@@ -18,6 +18,8 @@
     <script src="js/flasher-logic.js" defer></script>
     <script src="js/flasher-serial.js" defer></script>
     <script src="js/flasher-core.js" defer></script>
+    <script src="js/node-backup.js" defer></script>
+    <script src="js/flasher-backup.js" defer></script>
   </head>
   <body>
     <!-- Top Navigation Bar -->
@@ -120,7 +122,7 @@
           </div>
         </div>
 
-        <!-- Settings waiting to be sent: from the Builder or from a backup -->
+        <!-- Settings the Builder left waiting to be sent -->
         <div id="pendingConfigBanner" class="install-step" style="display: none;">
           <h2 class="card-title">Ajustes por enviar</h2>
           <p class="card-subtitle">Cuando la placa arranque con el firmware nuevo, envíale estos ajustes por USB.</p>
@@ -138,14 +140,23 @@
         </div>
       </div>
 
-      <details id="restoreSection" class="fold">
-        <summary>Restaurar un respaldo de ajustes</summary>
-        <p class="card-subtitle">Sube un <code>prefs.json</code> guardado antes para enviarlo a la placa.</p>
-        <div id="flasherDropzone" class="dropzone">
-          <div class="dropzone-icon">📥</div>
-          <div class="dropzone-title">Arrastra aquí tu archivo <code>prefs.json</code></div>
-          <input type="file" id="firmwareFileInput" accept=".json" style="display: none;" />
+      <details id="backupSection" class="fold">
+        <summary>Respaldo del nodo</summary>
+        <p class="card-subtitle">
+          Para repetidor y room server conectados por USB. Se lee del propio nodo: identidad, claves, ajustes y regiones.
+          No incluye las listas de clientes, la identidad de la sala virtual ni lo propio de la placa (calibración de
+          batería, LEDs, zumbador, rotaciones y zona horaria).
+        </p>
+        <p class="card-subtitle">
+          <strong>⚠️ El fichero no va cifrado:</strong> quien lo tenga puede suplantar y administrar el nodo. Guárdalo como una contraseña.
+        </p>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem;">
+          <button id="btnBackupSave" class="btn btn-primary btn-sm" type="button">💾 Guardar respaldo</button>
+          <button id="btnBackupPick" class="btn btn-outline btn-sm" type="button">📂 Elegir un respaldo</button>
+          <button id="btnBackupRestore" class="btn btn-primary btn-sm" type="button" style="display: none;">♻️ Restaurar en el nodo</button>
+          <input type="file" id="backupFileInput" accept=".json" style="display: none;" />
         </div>
+        <p id="backupStatus" class="card-subtitle" role="status" style="margin-top: 0.75rem;"></p>
       </details>
 
       <!-- Integrated Serial Terminal -->

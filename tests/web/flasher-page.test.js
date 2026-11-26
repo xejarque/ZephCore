@@ -66,6 +66,14 @@ test("the page starts and offers only the roles the catalog publishes", async ()
   assert.ok(els.flasherRoleSelect.innerHTML.includes("companion") && els.flasherRoleSelect.innerHTML.includes("repeater"));
 });
 
+test("a role the Builder chose that is not published stays chosen, and nothing is offered to flash", async () => {
+  const els = await loadPage({ pending: { name: "Sala", freq: "869.618", role: "observer" } });
+  assert.ok(els.flasherRoleSelect.innerHTML.includes("observer"));
+  assert.equal(els.flasherRoleSelect.value, "observer");
+  assert.match(els.previewBuildTag.textContent, /^Sin build Zephtacore/);
+  assert.equal(els.btnUnifiedFlash.disabled, true);
+});
+
 test("a board with a Zephtacore build is marked and its download button stays enabled", async () => {
   const els = await loadPage();
   assert.equal(els.previewBuildTag.textContent, "Build Zephtacore publicado");

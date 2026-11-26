@@ -40,6 +40,23 @@ test("no password is sent when none is set; ping bot carries its command; positi
   assert.equal(cmds.at(-1), "reboot");
 });
 
+test("a companion gets no password, which its firmware refuses", () => {
+  const cmds = L.buildConfigCommands({ ...cfg, role: "companion", guestPass: "guest" });
+  assert.ok(!cmds.some((c) => c.startsWith("password") || c.startsWith("set guest.password")));
+});
+
+test("guest password, GPS and auto-shutdown are sent only when chosen", () => {
+  const none = L.buildConfigCommands({ ...cfg, role: "repeater", guestPass: "", gps: "", autoShutdownMv: "" });
+  assert.ok(!none.some((c) => /guest|^gps|autoshutdown/.test(c)));
+  const all = L.buildConfigCommands({ ...cfg, role: "repeater", guestPass: "guest", gps: "off", autoShutdownMv: "3000" });
+  // A board without GPS refuses it, so nothing but the reboot may come after it.
+  assert.deepEqual(all.slice(-2), ["gps off", "reboot"]);
+  assert.ok(all.includes("set guest.password guest"));
+  assert.ok(all.includes("gps off"));
+  assert.ok(all.includes("set z.autoshutdown 3000"));
+  assert.equal(all.at(-1), "reboot");
+});
+
 test("observer gets its own commands: no password, tx or z.mt", () => {
   assert.deepEqual(L.buildConfigCommands({ ...cfg, role: "observer" }), [
     "set name Node", "set freq 869.618", "set sf 7", "set bw 62.5", "set cr 6", "reboot"
@@ -161,4 +178,15 @@ test("sha256: no hash in the catalog passes, the right one passes in any case, a
   assert.equal(await L.sha256Matches(bytes, "00" + abc.slice(2), subtle), false);
   await assert.rejects(L.sha256Matches(bytes, abc, undefined));
   assert.equal(await L.sha256Matches(bytes, undefined, undefined), true);
+});
+
+test("every command with a password has a stand-in without it", () => {
+  const cmds = L.buildConfigCommands({
+    role: "repeater", name: "n", freq: "869.618", sf: "7", bw: "62.5", cr: "2", txPower: "22",
+    adminPass: "s3cret one", guestPass: "gu3st", vroomEnable: true, vroomAccess: "private", vroomPass: "r00m"
+  }, 0);
+  const shown = cmds.map((c) => L.maskedCommand(c) || c);
+  assert.equal(shown.some((c) => /s3cret|gu3st|r00m/.test(c)), false);
+  assert.deepEqual(cmds.map(L.maskedCommand).filter(Boolean), ["password ••••", "set guest.password ••••", "set z.room.password ••••"]);
+  assert.equal(L.maskedCommand("set name password x"), "");
 });

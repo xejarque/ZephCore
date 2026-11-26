@@ -18,7 +18,7 @@ default channels and node name in order.
   catalog, instead of a UF2 copied by hand (the UF2 copy stays for browsers without Web Serial). The board reboots into
   the bootloader and the browser asks for its port once per step.
 - The web flasher shows one flow: the board and role, whether to keep the data or do a clean install, and the install
-  button, always visible. The settings to send, the console and the backup restore sit apart below it.
+  button, always visible. The settings to send, the node backup and the console sit apart below it.
 - On ESP32 a clean install erases the whole flash while writing. On nRF52 it loads the SoftDevice's formatter package first, which erases the file system and returns the
   board to the bootloader, and then the firmware. The formatter is the one the catalog names for the board. A clean
   install gives the node a new identity.
@@ -34,14 +34,36 @@ default channels and node name in order.
 
 ## A repeater or room server survives losing its file system
 
-- A repeater or room server on nRF52 or ESP32 keeps a copy of its identity, settings and regions outside the file
-  system. If the file system is lost, or one of those files no longer loads, the node comes back at the next boot with the
-  same key, password, radio parameters, regions and repeat settings of both meshes, so it can still be administered
-  over the air. Log in again: the list of clients and their permissions is not copied.
+- A repeater or room server on nRF52 or ESP32 keeps a copy of its identity, settings, regions and virtual room
+  identity outside the file system. If the file system is lost, or one of those files no longer loads, the node comes
+  back at the next boot with the same key, password, radio parameters, regions and repeat settings of both meshes, so
+  it can still be administered over the air. Log in again: the lists of clients and their permissions are not copied.
 - The copy is created by itself on a node that is already set up, and follows every administration command. `get
   z.rescue` tells its state and whether a file has been restored. See `docs/CLI_commands.md`.
 - `erase`, the formatter and flashing companion firmware remove it. Run `erase` before giving a node away.
 - Not on MG24, nRF54L or STM32WL boards.
+
+---
+
+## Web builder and node backup
+
+- **Node backup** in the web flasher, for a repeater or room server on USB: it reads the identity, passwords,
+  settings and regions from the node into a JSON file, and restores them on a node (also on a clean install). The file
+  is not encrypted: whoever holds it can impersonate and administer the node. Not saved: the client lists, the virtual
+  room's identity, a Meshtastic channel key of your own, and what belongs to the board (battery calibration, LEDs,
+  buzzer, screen and joystick rotation, time zone). It replaces the settings file the builder used to
+  download, and a file of that kind can no longer be loaded.
+- **Sending the settings by USB now stops when the node refuses one**, and says which and why. Before, a refusal went
+  unnoticed and the page reported success. The passwords sent this way no longer show in the console.
+- A companion is no longer sent `password` or the guest password, which it refuses. The guest password and the GPS
+  switch are now sent; the altitude field and the firewall checkbox, which sent nothing, are gone. Passwords take at
+  most 15 characters.
+- On a repeater whose board wakes on battery recovery, the builder asks for the low-battery power-off (off unless
+  ticked).
+- A role that is not published keeps its name in the flasher, which offers nothing to flash, instead of turning into
+  companion.
+- New `get password` (repeater, room server; over USB, and over LoRa to an admin) shows the admin password, and
+  `get z.mc.regions [page]` shows the whole region map in pages of whole lines. See `docs/CLI_commands.md`.
 
 ---
 

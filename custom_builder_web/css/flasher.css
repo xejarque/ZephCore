@@ -97,41 +97,6 @@
   flex-wrap: wrap;
 }
 
-/* Flasher Dropzone */
-.dropzone {
-  border: 2px dashed var(--border-card);
-  border-radius: var(--radius-lg);
-  padding: 3rem 2rem;
-  text-align: center;
-  background: var(--bg-input);
-  cursor: pointer;
-  transition: all var(--transition-normal);
-  margin-bottom: 1.5rem;
-}
-
-.dropzone:hover, .dropzone.dragover {
-  border-color: var(--brand-cyan);
-  background: rgba(0, 242, 254, 0.04);
-  box-shadow: 0 0 25px rgba(0, 242, 254, 0.12);
-}
-
-.dropzone-icon {
-  font-size: 3rem;
-  margin-bottom: 0.85rem;
-}
-
-.dropzone-title {
-  font-weight: 700;
-  font-size: 1.15rem;
-  color: var(--text-primary);
-  margin-bottom: 0.4rem;
-}
-
-.dropzone-sub {
-  font-size: 0.86rem;
-  color: var(--text-muted);
-}
-
 /* Progress Bar */
 .flashing-progress-card {
   background: var(--bg-surface);

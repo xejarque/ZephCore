@@ -6,7 +6,7 @@
     <title>Zephtacore · Firmware Builder Studio</title>
     <meta
       name="description"
-      content="Configura tu firmware Zephtacore a medida: selección de placa, rol, parámetros LoRa, canales Meshtastic e inyección directa por USB sin compilar."
+      content="Configura tu nodo Zephtacore: placa, rol, parámetros LoRa y opciones Meshtastic, y envíalos por USB sin compilar."
     />
     <link rel="icon" type="image/svg+xml" href="logo.svg" />
     <link rel="stylesheet" href="vendor/leaflet.css" />
@@ -96,7 +96,7 @@
         <span class="section-tag">Configurador Personalizado de Nodos</span>
         <h1 class="section-title">Builder Studio &amp; Espectro LoRa</h1>
         <p class="section-desc">
-          Elige tus parámetros de radio, canales Meshtastic, nombre y contraseñas. Podrás grabarlos directamente en tu dispositivo sin necesidad de instalar entornos de desarrollo ni compilar a mano.
+          Elige la radio, las opciones Meshtastic, el nombre y las contraseñas. Después se envían a tu placa por USB, sin instalar entornos de desarrollo ni compilar.
         </p>
       </div>
 
@@ -137,7 +137,7 @@
                 <span class="tag-badge tag-emerald">Configuración Inicial</span>
               </div>
               <p class="card-subtitle">
-                Define el nombre del nodo y la contraseña de administrador. Estos ajustes se aplicarán a tu placa durante el proceso de instalación y quedarán guardados en tu respaldo.
+                Define el nombre del nodo y las contraseñas. Se envían a la placa por USB después de grabar el firmware.
               </p>
             </div>
 
@@ -156,15 +156,15 @@
                   <label class="form-label" for="adminPassInput" style="margin: 0;">Clave Admin Maestra</label>
                   <button id="btnRandomPass" type="button" class="btn btn-sm btn-outline" style="padding: 0.15rem 0.5rem; font-size: 0.72rem;">🔑 Generar Segura</button>
                 </div>
-                <input type="text" id="adminPassInput" class="form-control" value="" />
-                <span class="form-hint">Contraseña para administrar el nodo por consola USB o comandos remotos por RF.</span>
+                <input type="text" id="adminPassInput" class="form-control" value="" maxlength="15" />
+                <span class="form-hint">Para administrar un repetidor o room server por radio. Máximo 15 caracteres. Un companion no la usa.</span>
               </div>
             </div>
 
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="guestPassInput">Clave Invitado (Opcional)</label>
-              <input type="text" id="guestPassInput" class="form-control" placeholder="(Opcional para BBS o invitados)" />
-              <span class="form-hint">Clave secundaria para usuarios que consultan telemetría o servicios BBS sin privilegios de administrador.</span>
+              <input type="text" id="guestPassInput" class="form-control" maxlength="15" placeholder="(Opcional, máx. 15 caracteres)" />
+              <span class="form-hint">Para entrar en un repetidor o room server como invitado, sin permisos de administrador.</span>
             </div>
           </div>
 
@@ -172,26 +172,27 @@
           <div class="card" style="margin-bottom: 1.5rem;">
             <div class="card-header">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                <h2 class="card-title">4. Posición Geográfica, Altitud &amp; Mapa Interactivo</h2>
+                <h2 class="card-title">4. Posición Geográfica &amp; Mapa Interactivo</h2>
                 <span class="tag-badge tag-cyan">Ubicación &amp; Telemetría</span>
               </div>
               <p class="card-subtitle">
-                Fija las coordenadas y altitud del nodo para el mapa de red, anuncios de posición por radio y cálculo de distancias de repetidores.
+                Fija las coordenadas del nodo para el mapa de red, los anuncios de posición por radio y el cálculo de distancias.
               </p>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="gpsMode">Modo del Receptor GPS</label>
+              <label class="form-label" for="gpsMode">Receptor GPS</label>
               <select id="gpsMode" class="form-control">
-                <option value="ENABLED" selected>ENABLED (Detección automática si la placa dispone de módulo GPS)</option>
-                <option value="DISABLED">DISABLED (Desactivar GPS para ahorrar batería)</option>
-                <option value="NOT_PRESENT">NOT_PRESENT (La placa no tiene receptor GPS integrado)</option>
+                <option value="" selected>Sin cambios (el ajuste del firmware)</option>
+                <option value="on">Activado</option>
+                <option value="off">Desactivado</option>
               </select>
+              <span class="form-hint">Elige activado o desactivado solo si la placa tiene receptor GPS.</span>
             </div>
 
             <div class="location-toolbar" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; margin-bottom: 0.85rem;">
               <div>
-                <strong style="color: var(--text-primary); font-size: 0.95rem;">Coordenadas Fijas de Fábrica (Opcional)</strong>
+                <strong style="color: var(--text-primary); font-size: 0.95rem;">Coordenadas fijas (opcional)</strong>
                 <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.2rem 0 0 0;">
                   Ideal para repetidores fijos o placas sin GPS. Puedes pulsar en <strong>Detectar mi ubicación</strong>, arrastrar el marcador en el mapa o hacer clic en cualquier punto.
                 </p>
@@ -221,10 +222,6 @@
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label" for="nodeLonInput">Longitud (°)</label>
                 <input type="number" step="any" id="nodeLonInput" class="form-control font-mono" placeholder="ej. 2.169918" />
-              </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label" for="nodeAltInput">Altitud (metros)</label>
-                <input type="number" id="nodeAltInput" class="form-control font-mono" placeholder="ej. 150" value="0" />
               </div>
             </div>
           </div>
@@ -291,7 +288,7 @@
           <div class="card" style="margin-bottom: 1.5rem;">
             <div class="card-header">
               <h2 class="card-title">6. Zephtacore Dual-Mesh &amp; Reenvío</h2>
-              <p class="card-subtitle">Control de políticas híbridas con Meshtastic y filtrado de colisiones.</p>
+              <p class="card-subtitle">Qué repite el nodo de la red Meshtastic.</p>
             </div>
 
             <div class="grid-2">
@@ -314,11 +311,6 @@
               <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-size:0.92rem;">
                 <input type="checkbox" id="mtOpaque" checked />
                 <span><strong>Relay Opaque:</strong> Retransmitir tramas de canales privados sin clave conocida.</span>
-              </label>
-
-              <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-size:0.92rem;">
-                <input type="checkbox" id="firewallEnable" checked />
-                <span><strong>Firewall Anti-Spam:</strong> Bloqueo de ráfagas maliciosas y saturación (z.mc.fw / z.mt.fw).</span>
               </label>
 
               <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-size:0.92rem;">
@@ -349,8 +341,23 @@
                 <div class="form-group" style="margin-bottom: 0;">
                   <label class="form-label" for="vroomPass">Contraseña de Sala (Opcional / Miembros)</label>
                   <input type="text" id="vroomPass" class="form-control" maxlength="15" placeholder="(Opcional, máx. 15 caracteres)" />
-                  <span class="form-hint">Independiente de la clave de telemetría de invitados del repetidor.</span>
+                  <span class="form-hint">Independiente de la clave de invitado del repetidor.</span>
                 </div>
+              </div>
+            </div>
+
+            <div id="autoShutdownSection" style="margin-top: 1.25rem; padding-top: 1.15rem; border-top: 1px solid var(--border-subtle); display: none;">
+              <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-size:0.92rem;">
+                <input type="checkbox" id="autoShutdownEnable" />
+                <span><strong>Auto-apagado por batería baja:</strong> el nodo se apaga para proteger la batería y vuelve solo cuando se recupera.</span>
+              </label>
+              <span class="form-hint" style="display:block; margin-top:0.35rem;">
+                Recomendado si tu batería no tiene un BMS probado que corte la descarga: sin él se puede dañar. El despertar está medido en esta placa.
+              </span>
+              <div id="autoShutdownOptions" class="form-group" style="margin: 0.9rem 0 0; display: none;">
+                <label class="form-label" for="autoShutdownMv">Umbral de apagado (mV)</label>
+                <input type="number" id="autoShutdownMv" class="form-control" min="2900" step="10" />
+                <span class="form-hint" id="autoShutdownHint"></span>
               </div>
             </div>
           </div>
@@ -365,19 +372,19 @@
               <span class="tag-badge tag-emerald" style="font-size: 0.68rem;">100% Sin Compilar</span>
             </div>
             <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary); margin-bottom: 0.5rem;">
-              ⚡ Flashear y Aplicar en 1 Clic
+              ⚡ Flashear y Configurar
             </h3>
             <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.25rem;">
-              No necesitas instalar entornos de desarrollo ni tener tokens de GitHub. Este flujo graba el firmware oficial Zephtacore e inyecta automáticamente <strong>tu nombre, clave admin, frecuencia y canales</strong> directamente al dispositivo por USB.
+              No necesitas instalar entornos de desarrollo ni tener tokens de GitHub. En el Flasher grabas el firmware oficial Zephtacore y después envías por USB <strong>los ajustes de este formulario</strong>.
             </p>
 
             <button id="btnFlashAndApply" class="btn btn-primary" style="width: 100%; padding: 0.85rem 1rem; font-size: 0.96rem; margin-bottom: 0.65rem;" type="button">
               ⚡ Flashear con esta Configuración →
             </button>
 
-            <button id="btnDownloadPrefs" class="btn btn-outline btn-sm" style="width: 100%;" type="button">
-              💾 Descargar Respaldo prefs.json
-            </button>
+            <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0;">
+              Para respaldar un nodo ya configurado, usa <a href="flasher.html#backupSection">Respaldo del nodo</a> en el Flasher.
+            </p>
           </div>
 
           <!-- Advanced Collapsible Section for Developers -->
@@ -385,7 +392,7 @@
             <summary>🛠️ Opciones Avanzadas para Desarrolladores (Compilación)</summary>
             <div style="margin-top: 1rem; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5;">
               <p style="margin-bottom: 0.75rem;">
-                Si deseas compilar tu propio binario con tus claves incrustadas permanentemente en la ROM del chip (para resistir formateos de bajo nivel de la memoria flash), usa estas opciones:
+                Para compilar tu propio binario. Solo quedan dentro de él las <strong>contraseñas, la potencia TX y los saltos Meshtastic</strong>: un nodo borrado vuelve con esos valores. El nombre, la radio, la posición, el GPS, la sala y el auto-apagado se configuran después por USB. Quien tenga el fichero puede leer las contraseñas.
               </p>
 
               <div class="code-block" style="font-size: 0.72rem; max-height: 120px; overflow-y: auto;">

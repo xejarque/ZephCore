@@ -2,9 +2,8 @@
  * Zephtacore Web Flasher Core Engine - Direct USB Configuration Injection
  */
 function initFlasherCore() {
-  const { buildConfigCommands, catalogFiles, findCatalogFile, formatterUrl, isErrorReply, sha256Matches } = window.ZephtacoreLogic;
-  const dropzone = document.getElementById("flasherDropzone");
-  const fileInput = document.getElementById("firmwareFileInput");
+  const { buildConfigCommands, catalogFiles, findCatalogFile, formatterUrl, isErrorReply, maskedCommand, sha256Matches } =
+    window.ZephtacoreLogic;
   const boardSelect = document.getElementById("flasherBoardSelect");
   const roleSelect = document.getElementById("flasherRoleSelect");
   const progressCard = document.getElementById("progressCard");
@@ -48,8 +47,10 @@ function initFlasherCore() {
   // build.sh publishes only these two roles; the others are built with west.
   const PUBLISHED_ROLES = ["companion", "repeater"];
 
-  if (roleSelect && window.ZEPHTACORE_ROLES) {
-    roleSelect.innerHTML = window.ZEPHTACORE_ROLES.filter((r) => PUBLISHED_ROLES.includes(r.id)).map(
+  // The role the Builder chose is offered too, so that it is not swapped for a published one.
+  function offerRoles(chosen) {
+    if (!roleSelect || !window.ZEPHTACORE_ROLES) return;
+    roleSelect.innerHTML = window.ZEPHTACORE_ROLES.filter((r) => PUBLISHED_ROLES.includes(r.id) || r.id === chosen).map(
       (r) => `<option value="${r.id}">${r.name}</option>`
     ).join("");
   }
@@ -75,15 +76,16 @@ function initFlasherCore() {
     try {
       pendingConfig = JSON.parse(savedCfgStr);
       showPendingConfig();
-
-      // Preselect what the Builder chose; the selects stay the source of truth.
-      if (boardSelect && pendingConfig.boardId) boardSelect.value = pendingConfig.boardId;
-      if (roleSelect && pendingConfig.role) roleSelect.value = pendingConfig.role;
     } catch (e) {
       console.warn("Error parsing pending config:", e);
       sessionStorage.removeItem(PENDING_KEY);
     }
   }
+
+  // Preselect what the Builder chose; the selects stay the source of truth.
+  offerRoles(pendingConfig && pendingConfig.role);
+  if (boardSelect && pendingConfig && pendingConfig.boardId) boardSelect.value = pendingConfig.boardId;
+  if (roleSelect && pendingConfig && pendingConfig.role) roleSelect.value = pendingConfig.role;
 
   function syncBoardPreview() {
     if (!boardSelect || !window.ZEPHTACORE_BOARDS) return;
@@ -146,10 +148,12 @@ function initFlasherCore() {
         if (!(await serial.sendCommand(cmd))) return fail(cmd, "no se pudo enviar");
         continue;
       }
-      const reply = await serial.sendCommandAndWait(cmd);
-      if (!reply.sent) return fail(cmd, "no se pudo enviar");
-      if (reply.timedOut) return fail(cmd, "el nodo no respondió");
-      if (isErrorReply(reply.text)) return fail(cmd, `el nodo respondió: ${reply.text}`);
+      const secret = maskedCommand(cmd);
+      const shown = secret || cmd;
+      const reply = await serial.sendCommandAndWait(cmd, { secret });
+      if (!reply.sent) return fail(shown, "no se pudo enviar");
+      if (reply.timedOut) return fail(shown, "el nodo no respondió");
+      if (isErrorReply(reply.text)) return fail(shown, `el nodo respondió: ${reply.text}`);
     }
 
     sessionStorage.removeItem(PENDING_KEY);
@@ -170,67 +174,6 @@ function initFlasherCore() {
     btnInjectOnly.addEventListener("click", () => runInjectOnly(pendingConfig));
   }
   if (btnNextStep) btnNextStep.addEventListener("click", runNextStep);
-
-  // Dropzone drag-and-drop
-  if (dropzone && fileInput) {
-    dropzone.addEventListener("click", () => fileInput.click());
-
-    dropzone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      dropzone.classList.add("dragover");
-    });
-
-    dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("dragover");
-    });
-
-    dropzone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      dropzone.classList.remove("dragover");
-      if (e.dataTransfer.files.length > 0) {
-        handleFileSelected(e.dataTransfer.files[0]);
-      }
-    });
-
-    fileInput.addEventListener("change", (e) => {
-      if (e.target.files.length > 0) {
-        handleFileSelected(e.target.files[0]);
-      }
-    });
-  }
-
-  // Only prefs.json backups: the firmware comes from the catalog.
-  function handleFileSelected(file) {
-    if (!file.name.endsWith(".json")) {
-      alert("Solo se admiten respaldos prefs.json. El firmware se descarga del catálogo.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const imported = JSON.parse(e.target.result);
-        if (!imported) return;
-        pendingConfig = {
-          name: imported.name || "ZephtaNode",
-          adminPass: imported.password || "",
-          freq: (imported.radio && imported.radio.freq) || "869.618",
-          sf: (imported.radio && imported.radio.sf) || "7",
-          bw: (imported.radio && imported.radio.bw) || "62.5",
-          cr: (imported.radio && imported.radio.cr) || "2",
-          txPower: (imported.radio && imported.radio.tx_power) || "22",
-          mtRelay: (imported.mt && imported.mt.relay) || "essential",
-          mtOpaque: imported.mt ? imported.mt.opaque : true,
-          mtHops: (imported.mt && imported.mt.hops) || "7",
-          pingBot: imported.mt ? imported.mt.ping : false
-        };
-        showPendingConfig();
-        alert(`¡Respaldo "${file.name}" cargado con éxito! Pulsa "Enviar ajustes por USB" para restaurar tu nodo.`);
-      } catch (err) {
-        alert(`Error al leer el archivo JSON: ${err.message}`);
-      }
-    };
-    reader.readAsText(file);
-  }
 
   const CATALOG_URLS = [
     "firmware/catalog.json",
@@ -389,7 +332,7 @@ function initFlasherCore() {
     return `Descargado "${fileName}".${next}`;
   }
 
-  // The Builder or a backup left settings to send once the new firmware runs.
+  // The Builder left settings to send once the new firmware runs.
   const SEND_SETTINGS_HINT = () =>
     pendingConfig ? ' Cuando la placa arranque, pulsa "Enviar ajustes por USB".' : "";
 
@@ -417,6 +360,7 @@ function initFlasherCore() {
   // Whether the page can clean the board: the ESP32 flash is erased from here, and a UF2 board needs
   // the SoftDevice formatter of the catalog.
   async function canCleanInstall(board, role) {
+    if (!PUBLISHED_ROLES.includes(role)) return false;
     return board.flashType === "bin" || (board.flashType === "uf2" && !!(await resolveFormatterUrl(board, role)));
   }
 

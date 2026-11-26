@@ -74,6 +74,7 @@ window.ZEPHTACORE_BOARDS = [
     flashType: "uf2",
     recommendedRoles: ["repeater"],
     desc: "Placa de alta potencia (1 Watt / 30dBm) con circuitería blindada optimizada para repetidores solares y cumbres.",
+    batteryWake: { maxMv: 3080, suggestedMv: 3000 },
     defaultOffset: "0x00"
   },
   {
@@ -409,6 +410,7 @@ window.ZEPHTACORE_BOARDS = [
     flashType: "uf2",
     recommendedRoles: ["companion", "repeater"],
     desc: "Build artesanal DIY ultra-económica y ligera para nodos móviles o mochileros.",
+    batteryWake: { maxMv: 3300, suggestedMv: 3200 },
     defaultOffset: "0x00"
   },
   {

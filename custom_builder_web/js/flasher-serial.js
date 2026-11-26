@@ -9,6 +9,7 @@ window.ZephtacoreSerial = (function () {
   let writableStreamClosed = null;
   let isConnected = false;
   let rxListeners = [];
+  let muted = false;
   let commandHistory = [];
   let historyIdx = -1;
 
@@ -28,6 +29,7 @@ window.ZephtacoreSerial = (function () {
   }
 
   async function connect() {
+    if (isConnected) return true;
     if (!("serial" in navigator)) {
       alert("Tu navegador no soporta Web Serial API. Por favor usa Google Chrome, Microsoft Edge o Opera en escritorio.");
       return false;
@@ -104,7 +106,7 @@ window.ZephtacoreSerial = (function () {
         const { value, done } = await streamReader.read();
         if (done) break;
         if (value) {
-          logToTerminal(value, "rx");
+          if (!muted) logToTerminal(value, "rx");
           rxListeners.forEach((fn) => fn(value));
         }
       }
@@ -117,16 +119,25 @@ window.ZephtacoreSerial = (function () {
     }
   }
 
-  async function sendCommand(cmd) {
-    if (!writer || !isConnected) {
-      logToTerminal("[!] No hay conexión serie activa. Pulsa 'Conectar Puerto Serie'.\n", "error");
-      return false;
-    }
-    const cleanCmd = cmd.trim();
-    if (!cleanCmd) return false;
+  function isReady() {
+    if (writer && isConnected) return true;
+    logToTerminal("[!] No hay conexión serie activa. Pulsa 'Conectar Puerto Serie'.\n", "error");
+    return false;
+  }
 
-    logToTerminal(`> ${cleanCmd}\n`, "tx");
-    await writer.write(`${cleanCmd}\r\n`);
+  // Writes a line exactly as given; shown stands for it in the terminal.
+  async function writeLine(line, shown = line) {
+    if (!isReady()) return false;
+    logToTerminal(`> ${shown}\n`, "tx");
+    // The node collapses a CR LF pair: after one, only a lone LF reads as a blank line.
+    await writer.write(line ? `${line}\r\n` : "\n");
+    return true;
+  }
+
+  // A command typed or composed here: trimmed, never empty, kept in the history.
+  async function sendCommand(cmd) {
+    const cleanCmd = cmd.trim();
+    if (!cleanCmd || !(await writeLine(cleanCmd))) return false;
 
     if (commandHistory[commandHistory.length - 1] !== cleanCmd) {
       commandHistory.push(cleanCmd);
@@ -135,27 +146,37 @@ window.ZephtacoreSerial = (function () {
     return true;
   }
 
-  // Sends a command and returns what the node answers: the text received until
-  // it stays quiet for quietMs, or timedOut when nothing came back in timeoutMs.
-  async function sendCommandAndWait(cmd, { timeoutMs = 3000, quietMs = 300 } = {}) {
+  // Sends a command and returns the node's reply, complete once it stays quiet for quietMs;
+  // timedOut when no reply arrived in timeoutMs.
+  // raw: the line goes as it is (it may start or end with spaces, or be empty).
+  // secret: a line shown instead of it; nothing the node sends meanwhile reaches the terminal.
+  async function sendCommandAndWait(cmd, { timeoutMs = 3000, quietMs = 300, raw = false, secret = "" } = {}) {
     let received = "";
     let quietTimer = null;
     let timeoutTimer = null;
     let finish;
     const done = new Promise((resolve) => (finish = resolve));
 
+    const settle = () => {
+      const reply = window.ZephtacoreLogic.nodeReply(received);
+      finish({ text: reply || "", timedOut: reply === null });
+    };
+    // The echo of the command arrives before the reply, which may take a flash write.
     const listener = (chunk) => {
       received += chunk;
       clearTimeout(quietTimer);
-      quietTimer = setTimeout(() => finish({ text: received.trim(), timedOut: false }), quietMs);
+      if (window.ZephtacoreLogic.nodeReply(received) !== null) quietTimer = setTimeout(settle, quietMs);
     };
     rxListeners.push(listener);
-    timeoutTimer = setTimeout(() => finish({ text: received.trim(), timedOut: received === "" }), timeoutMs);
+    timeoutTimer = setTimeout(settle, timeoutMs);
+    if (secret) muted = true;
 
     try {
-      if (!(await sendCommand(cmd))) return { text: "", timedOut: false, sent: false };
+      const sent = secret ? writeLine(cmd, secret) : raw ? writeLine(cmd) : sendCommand(cmd);
+      if (!(await sent)) return { text: "", timedOut: false, sent: false };
       return { ...(await done), sent: true };
     } finally {
+      muted = false;
       clearTimeout(quietTimer);
       clearTimeout(timeoutTimer);
       rxListeners = rxListeners.filter((fn) => fn !== listener);
@@ -225,6 +246,7 @@ window.ZephtacoreSerial = (function () {
   return {
     setup,
     sendCommand,
+    writeLine,
     sendCommandAndWait,
     log: logToTerminal,
     connect,

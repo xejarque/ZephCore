@@ -46,3 +46,22 @@ test("arch and flash type follow the board's platform", () => {
     assert.equal(b.flashType === "bin", platform === "esp32", `${b.id}: flashType ${b.flashType}`);
   }
 });
+
+test("auto-shutdown is offered where the board wakes on battery, up to 300 mV under its wake voltage", () => {
+  const wake = new Map();
+  for (const dir of Object.keys(PLATFORM_OF_DIR)) {
+    const root = path.join(BOARDS_DIR, dir);
+    for (const board of fs.readdirSync(root, { withFileTypes: true })) {
+      const dts = path.join(root, board.name, `${board.name}.dts`);
+      if (!board.isDirectory() || !fs.existsSync(dts)) continue;
+      const mv = fs.readFileSync(dts, "utf8").match(/battery-wake-mv = <(\d+)>/);
+      if (mv) wake.set(board.name, Number(mv[1]));
+    }
+  }
+  const offered = web.filter((b) => b.batteryWake);
+  assert.deepEqual(offered.map((b) => b.id).sort(), [...wake.keys()].sort());
+  for (const b of offered) {
+    assert.equal(b.batteryWake.maxMv, wake.get(b.id) - 300, `${b.id}: maxMv`);
+    assert.ok(b.batteryWake.suggestedMv >= 2900 && b.batteryWake.suggestedMv <= b.batteryWake.maxMv, `${b.id}: suggestedMv`);
+  }
+});
