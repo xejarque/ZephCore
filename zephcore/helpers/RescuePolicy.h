@@ -33,6 +33,8 @@ constexpr size_t CHUNK_SIZE = 1024;
 constexpr size_t MAX_CHUNKS = 6;
 constexpr size_t MAX_FILE_SIZE = MAX_CHUNKS * CHUNK_SIZE;
 constexpr uint32_t FORMAT = 1;
+/* A clock that reads earlier was never set. */
+constexpr uint32_t CLOCK_SET_AFTER = 1772323200;  /* 1 Mar 2026 */
 
 /* Written after the chunks, so an interrupted write fails its checksum. */
 struct Head {
@@ -117,28 +119,20 @@ public:
 		return false;
 	}
 
-	/* Puts back each file that does not load and has a whole entry, and notes
-	 * which files loaded. Call before their owners load them. A file that
-	 * cannot be written back stops all writes, so its entry survives. */
-	void restoreLostFiles(uint32_t epoch)
+	/* At boot, before the files' owners load them: a file that does not load
+	 * comes back from a whole entry, and a file that loads creates or repairs
+	 * its entry; a whole entry is never replaced here. A file that cannot be
+	 * written back stops all writes, so its entry survives. */
+	void atBoot(uint32_t now)
 	{
 		for (Item item : ITEMS) {
-			bool loads = _files.loads(item);
+			const bool loads = _files.loads(item);
+			const bool whole = state(item) == State::Valid;
 
-			_loaded_at_boot[index(item)] = loads;
-			if (!loads && state(item) == State::Valid) {
-				restore(item, epoch);
-			}
-		}
-	}
-
-	/* Creates or repairs entries from the files that loaded at boot, not from
-	 * ones this boot created. A whole entry is never replaced here. */
-	void completeAtBoot()
-	{
-		for (Item item : ITEMS) {
-			if (_loaded_at_boot[index(item)] && state(item) != State::Valid) {
+			if (loads && !whole) {
 				save(item);
+			} else if (!loads && whole) {
+				restore(item, now);
 			}
 		}
 	}
@@ -156,6 +150,22 @@ public:
 	/* No more writes until the reboot: the node is being erased. */
 	void stopWriting() { _writable = false; }
 
+	/* Chunk i of a whole entry, valid until the next call; nullptr past the
+	 * last one or when it cannot be read. */
+	const uint8_t *chunk(Item item, size_t i, size_t &length)
+	{
+		const size_t file_length = _heads[index(item)].length;
+
+		if (state(item) != State::Valid || i >= chunkCount(file_length)) {
+			return nullptr;
+		}
+		char key[KEY_CAP];
+
+		length = chunkLength(file_length, i);
+		chunkKey(key, item, i);
+		return _store.read(key, _chunk, length) == (int)length ? _chunk : nullptr;
+	}
+
 	/* Appends the file's bytes, from a whole entry, to the sink. */
 	template <class Sink>
 	bool copyTo(Item item, Sink &sink)
@@ -163,14 +173,11 @@ public:
 		if (state(item) != State::Valid) {
 			return false;
 		}
-		const size_t length = _heads[index(item)].length;
-		char key[KEY_CAP];
+		for (size_t i = 0; i < chunkCount(_heads[index(item)].length); i++) {
+			size_t length;
+			const uint8_t *data = chunk(item, i, length);
 
-		for (size_t i = 0; i < chunkCount(length); i++) {
-			const size_t n = chunkLength(length, i);
-
-			chunkKey(key, item, i);
-			if (_store.read(key, _chunk, n) != (int)n || !sink.append(_chunk, n)) {
+			if (data == nullptr || !sink.append(data, length)) {
 				return false;
 			}
 		}
@@ -225,16 +232,16 @@ private:
 		return crc == head.crc ? State::Valid : State::Broken;
 	}
 
-	void restore(Item item, uint32_t epoch)
+	void restore(Item item, uint32_t now)
 	{
 		if (_files.replace(item, [this, item](auto &sink) { return this->copyTo(item, sink); })) {
-			noteRestore(epoch);
+			noteRestore(now);
 		} else {
 			_writable = false;
 		}
 	}
 
-	void noteRestore(uint32_t epoch)
+	void noteRestore(uint32_t now)
 	{
 		if (!_writable) {
 			return;
@@ -242,7 +249,7 @@ private:
 		Restores r = restores();
 
 		r.count++;
-		r.last_epoch = epoch;
+		r.last_epoch = now > CLOCK_SET_AFTER ? now : 0;
 		_store.write(RESTORES_KEY, &r, sizeof(r));
 	}
 
@@ -304,7 +311,6 @@ private:
 	Files &_files;
 	Head _heads[ITEM_COUNT] = {};
 	State _states[ITEM_COUNT] = {};
-	bool _loaded_at_boot[ITEM_COUNT] = {};
 	bool _writable = false;
 	uint8_t _chunk[CHUNK_SIZE];
 };

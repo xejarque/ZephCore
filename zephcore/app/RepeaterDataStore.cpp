@@ -46,6 +46,31 @@ bool RepeaterDataStore::begin() {
 
 const char* RepeaterDataStore::getBasePath() const { return BASE_PATH; }
 
+void RepeaterDataStore::openRescueCopy() {
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	_rescue.open();
+#endif
+}
+
+bool RepeaterDataStore::formatForFirstBoot() {
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	bool mounted = zephcore_fs_format_keep_settings(nullptr);
+
+	_rescue.clearUnlessWorthKeeping();
+	return mounted;
+#else
+	return zephcore_fs_format_all(nullptr);
+#endif
+}
+
+void RepeaterDataStore::syncRescueCopyAtBoot(uint32_t now) {
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	_rescue.atBoot(now);
+#else
+	ARG_UNUSED(now);
+#endif
+}
+
 bool RepeaterDataStore::hasRoleData() const {
 	char path[64];
 
@@ -64,7 +89,14 @@ bool RepeaterDataStore::hasRoleData() const {
 bool RepeaterDataStore::loadIdentity(mesh::LocalIdentity& id) {
 	char path[48];
 	snprintf(path, sizeof(path), "%s/_main.id", BASE_PATH);
-	return zephcore_identity_load(path, id);
+	if (zephcore_identity_load(path, id)) return true;
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	if (_rescue.readIdentity(id)) {
+		LOG_WRN("%s not restored - using the identity of the rescue copy", path);
+		return true;
+	}
+#endif
+	return false;
 }
 
 bool RepeaterDataStore::saveIdentity(const mesh::LocalIdentity& id) {
@@ -83,6 +115,12 @@ bool RepeaterDataStore::loadPrefs(NodePrefs& prefs) {
 		LOG_INF("Loaded prefs from %s", path);
 		return true;
 	}
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	if (_rescue.readPrefs(prefs)) {
+		LOG_WRN("%s not restored - using the settings of the rescue copy", path);
+		return true;
+	}
+#endif
 	bool had_json = zephcore_fs_exists(path);
 
 	/* No usable prefs.json: the legacy binary file, read once and migrated.
@@ -188,6 +226,9 @@ bool RepeaterDataStore::formatFileSystem() {
 	 * nRF52840 the Adafruit core's filesystem overlaps the top of ours), and
 	 * it left /lfs/settings, stale companion files and all of /ext behind.
 	 * Shared with the companion so all four roles erase the same regions. */
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	_rescue.stopWriting();
+#endif
 	bool mounted = zephcore_fs_format_all(nullptr);
 	if (!mounted) {
 		LOG_ERR("Factory reset: /lfs did not remount");

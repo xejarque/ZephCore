@@ -1094,7 +1094,7 @@
     },
     {
       "id": "UNIT-RESCUE-004",
-      "name": "files this boot creates on an empty node are not copied until the next boot or command",
+      "name": "files this boot creates on an empty node are not copied until a command",
       "source": "tests/unit/rescue_tests.cpp"
     },
     {

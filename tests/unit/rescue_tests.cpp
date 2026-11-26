@@ -92,8 +92,7 @@ struct Boot {
     explicit Boot(Node &node, uint32_t epoch = 0) : copy(node.store, node.files)
     {
         copy.open();
-        copy.restoreLostFiles(epoch);
-        copy.completeAtBoot();
+        copy.atBoot(epoch);
     }
 };
 
@@ -141,19 +140,16 @@ TEST(rescue_keeps_good_files, "UNIT-RESCUE-003", "a file that loads is left alon
     CHECK(second.copy.restores().count == 0);
 }
 
-TEST(rescue_not_from_new_files, "UNIT-RESCUE-004", "files this boot creates on an empty node are not copied until the next boot or command") {
+TEST(rescue_not_from_new_files, "UNIT-RESCUE-004", "files this boot creates on an empty node are not copied until a command") {
     Node node;
     const std::map<Item, std::string> created = node.files.files;
     node.files.files.clear();
-    rescue::Copy<FakeStore, FakeFiles> copy(node.store, node.files);
-    copy.open();
-    copy.restoreLostFiles(0);
+    Boot boot(node);
     node.files.files = created;                         // the owners write their defaults
-    copy.completeAtBoot();
     CHECK(node.store.keys.empty());
 
-    copy.followFiles();
-    CHECK(entry(copy, Item::Identity) == created.at(Item::Identity));
+    boot.copy.followFiles();
+    CHECK(entry(boot.copy, Item::Identity) == created.at(Item::Identity));
 }
 
 TEST(rescue_follows_commands, "UNIT-RESCUE-005", "after a command only the files that changed are written") {
@@ -187,7 +183,7 @@ TEST(rescue_erase, "UNIT-RESCUE-007", "once writing is stopped for an erase noth
     node.store.keys.clear();                            // the erase
     boot.copy.stopWriting();
     boot.copy.followFiles();
-    boot.copy.completeAtBoot();
+    boot.copy.atBoot(0);
     CHECK(node.store.keys.empty());
 }
 
@@ -317,7 +313,7 @@ TEST(rescue_restore_count, "UNIT-RESCUE-016", "restores add up across boots and 
     node.files.files.erase(Item::Prefs);
     Boot second(node, 1795000000);
     node.files.files.erase(Item::Prefs);
-    Boot third(node, 0);
+    Boot third(node, 90);                               // an unset clock counts seconds since boot
     CHECK(third.copy.restores().count == 2);
     CHECK(third.copy.restores().last_epoch == 0);
 }

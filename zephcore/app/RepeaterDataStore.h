@@ -17,10 +17,14 @@
 
 #include <cstdint>
 #include <stddef.h>
+#include <zephyr/sys/util_macro.h>
 #include <mesh/Identity.h>
 #include <helpers/NodePrefs.h>
 #include <helpers/ClientACL.h>
 #include <helpers/RegionMap.h>
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+#include "../adapters/datastore/RescueCopy.h"
+#endif
 
 class RepeaterDataStore {
 public:
@@ -28,6 +32,13 @@ public:
 
 	/* Initialize filesystem and repeater directory */
 	bool begin();
+
+	/* The rescue copy of identity, prefs and regions (ADR 0021). Without
+	 * CONFIG_ZEPHTACORE_RESCUE_COPY the format is a plain one and the other
+	 * two do nothing. */
+	void openRescueCopy();            /* first, before any format */
+	bool formatForFirstBoot();
+	void syncRescueCopyAtBoot(uint32_t now);  /* after begin(), before loading */
 
 	/* Identity management */
 	bool loadIdentity(mesh::LocalIdentity& id);
@@ -61,4 +72,7 @@ private:
 	bool loadLegacyPrefs(const char* path, NodePrefs& prefs);
 	static constexpr const char* BASE_PATH = "/lfs/repeater";
 	ZephyrFS _fs{BASE_PATH};
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	RescueCopy _rescue{BASE_PATH};
+#endif
 };

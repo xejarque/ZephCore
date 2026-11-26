@@ -19,14 +19,14 @@ antes.
 ## Arranque (`server_main_common.cpp`)
 
 1. Abrir la NVS. Si el backend no arranca, borrar `storage_partition` una vez y reintentar.
-2. Clasificar la copia: válida, ausente o error de lectura.
-3. `hasRoleData()` falso: formatear como hoy, conservando la NVS si la copia es válida o dio error de lectura.
+2. Clasificar la copia: válida, ausente, rota o error de lectura.
+3. `hasRoleData()` falso: formatear LittleFS y QSPI como hoy; la NVS se vacía (a través de NVS, no borrando la
+   partición bajo el backend montado) salvo que tenga una entrada válida o diera error de lectura.
 4. Antes de cargar nada, por cada fichero: si falta o no carga y su entrada es válida, reponerlo y anotar la
-   restauración.
-5. Cargar identidad, ajustes y regiones como hoy. Sin sistema de ficheros escribible: identidad y ajustes desde la
-   copia en RAM.
-6. Crear solo las entradas ausentes o rotas, desde ficheros que cargaron. Con error de lectura de la NVS no se
-   escribe en ese arranque.
+   restauración; si carga y su entrada está ausente o rota, escribirla. Con error de lectura de la NVS o una
+   reposición fallida no se escribe en ese arranque.
+5. Cargar identidad, ajustes y regiones como hoy. Si un fichero no se pudo reponer, identidad y ajustes se cargan
+   en RAM desde la copia.
 
 ## Después
 
@@ -54,7 +54,7 @@ Una unidad revisable por tarea, con commit propio en rama de trabajo desde `fork
 
 - [x] **T1.** `RescuePolicy.h` y sus tests (`tests/unit/rescue_tests.cpp`, `tests/catalog.json`).
 - [x] **T2.** Almacén NVS y capacidad Kconfig.
-- [ ] **T3.** Secuencia de arranque, conservación al formatear y desarmado tras `erase`.
+- [x] **T3.** Secuencia de arranque, conservación al formatear y desarmado tras `erase`.
 - [ ] **T4.** Escritura tras comando y `get z.rescue`.
 - [ ] **T5.** Documentación y notas de versión.
 - [ ] **T6.** Compilaciones y medida de flash y RAM.

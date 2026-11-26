@@ -30,6 +30,11 @@ extern "C" {
 bool zephcore_fs_format_all(bool *out_ext_mounted);
 
 /**
+ * @brief zephcore_fs_format_all() leaving the settings NVS as it is.
+ */
+bool zephcore_fs_format_keep_settings(bool *out_ext_mounted);
+
+/**
  * @brief Erase the settings NVS alone (storage_partition); a no-op where the
  * board has none.
  */

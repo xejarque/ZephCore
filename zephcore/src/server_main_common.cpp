@@ -48,7 +48,6 @@ extern "C" void bt_ctlr_assert_handle(char *file, uint32_t line)
 
 #include "server_main_common.h"
 #include "mesh_events.h"
-#include "../adapters/datastore/ZephyrFsFormat.h"
 #include <helpers/LoopWakeStats.h>
 #include <helpers/pm_sleep_guard.h>
 #include <Serial.h>
@@ -656,11 +655,14 @@ int server_main(const ServerRole &role)
 	}
 #endif
 
-	/* First boot on a volume that is not this role's: erase everything (LittleFS,
-	 * bond NVS, QSPI). Self-limiting: this boot writes the role's data. */
+	data_store.openRescueCopy();
+
+	/* First boot on a volume that is not this role's: erase everything
+	 * (LittleFS, QSPI, and the settings NVS unless it holds a rescue copy).
+	 * Self-limiting: this boot writes the role's data. */
 	if (!data_store.hasRoleData()) {
 		LOG_WRN("Volume holds no data for this role - formatting before first boot");
-		if (!zephcore_fs_format_all(nullptr)) {
+		if (!data_store.formatForFirstBoot()) {
 			LOG_ERR("First-boot format failed - /lfs is not mounted");
 		}
 	}
@@ -729,6 +731,9 @@ int server_main(const ServerRole &role)
 	lora_radio.setTxDoneCallback(lora_tx_done_callback, nullptr);
 	role.mesh->setTxQueuedCallback(tx_queued_callback, nullptr);
 	role.mesh->setWakeCallback(wake_callback, nullptr);
+
+	/* Lost files come back from the rescue copy before anything loads them. */
+	data_store.syncRescueCopyAtBoot(rtc_clock.getCurrentTime());
 
 	/* Load or generate identity BEFORE begin(). First-boot keygen runs
 	 * the layered entropy mixer + Ed25519 derive + reserved-prefix

@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include <NodePrefs.h>
 #include <RescuePolicy.h>
+#include <mesh/Identity.h>
 #include "ZephyrFsUtil.h"
 
 class RescueStore {
@@ -15,6 +17,9 @@ public:
 	/* Starts the settings backend. One that does not start has its region
 	 * erased once: it may hold another firmware's bytes. */
 	void begin();
+
+	/* Drops every setting in the region. */
+	void clear();
 
 	int read(const char *key, void *buf, size_t cap);
 	bool write(const char *key, const void *data, size_t len);
@@ -68,4 +73,29 @@ private:
 	const char *_dir;
 };
 
-using RescueCopy = rescue::Copy<RescueStore, RescueFiles>;
+/* The rescue copy of the role files in one directory. */
+class RescueCopy {
+public:
+	explicit RescueCopy(const char *dir) : _files(dir) {}
+
+	/* Starts the storage and reads the copy; before any format. */
+	void open();
+
+	/* After a first-boot format that kept the storage. */
+	void clearUnlessWorthKeeping();
+
+	/* Before the files are loaded; see rescue::Copy::atBoot(). */
+	void atBoot(uint32_t now) { _copy.atBoot(now); }
+
+	/* No more writes until the reboot. */
+	void stopWriting() { _copy.stopWriting(); }
+
+	/* From the copy, for a file the filesystem could not take back. */
+	bool readIdentity(mesh::LocalIdentity &id);
+	bool readPrefs(NodePrefs &prefs);
+
+private:
+	RescueStore _store;
+	RescueFiles _files;
+	rescue::Copy<RescueStore, RescueFiles> _copy{_store, _files};
+};
