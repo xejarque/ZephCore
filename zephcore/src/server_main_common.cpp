@@ -610,6 +610,9 @@ static void server_event_loop(void)
 #endif /* ZEPHCORE_HAS_UI */
 		}
 
+		/* The rescue copy follows what this pass's commands changed. */
+		data_store.followRescueCopy();
+
 		/* Re-arm for the soonest deadline this pass left behind.  Done for
 		 * every wake, not just maintenance ones: a CLI command, an inbound
 		 * packet or a GPS fix can all create or clear a deadline. */

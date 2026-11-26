@@ -87,8 +87,22 @@ public:
 	/* Before the files are loaded; see rescue::Copy::atBoot(). */
 	void atBoot(uint32_t now) { _copy.atBoot(now); }
 
+	/* An administration command ran: the copy follows the files at the next
+	 * followIfDue(), outside the command's call stack. */
+	void noteCommand() { _due = true; }
+
+	void followIfDue()
+	{
+		if (_due) {
+			_due = false;
+			_copy.followFiles();
+		}
+	}
+
 	/* No more writes until the reboot. */
 	void stopWriting() { _copy.stopWriting(); }
+
+	void report(char *reply, size_t cap) { _copy.report(reply, cap); }
 
 	/* From the copy, for a file the filesystem could not take back. */
 	bool readIdentity(mesh::LocalIdentity &id);
@@ -98,4 +112,5 @@ private:
 	RescueStore _store;
 	RescueFiles _files;
 	rescue::Copy<RescueStore, RescueFiles> _copy{_store, _files};
+	bool _due = false;
 };

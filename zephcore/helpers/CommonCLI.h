@@ -86,6 +86,8 @@ public:
 	/* "get z.info" and "get z.stats": the role fills what it has (storage and contacts; the counters). */
 	virtual void fillZInfo(zinfo::Info& info) { (void)info; }
 	virtual void fillZStats(zinfo::Stats& stats) { (void)stats; }
+	/* "get z.rescue": a server's rescue copy of its identity, prefs and regions. */
+	virtual void formatRescueReply(char* reply, size_t cap) { snprintf(reply, cap, "Error: not available in this role"); }
 	/* "get z.mc.neighbors [page]" and "get z.mt.neighbors [page]": nodes heard directly, best SNR first. */
 	virtual void formatMcNeighbours(char* reply, size_t cap, size_t page, bool recent) { (void)cap; (void)page; (void)recent; strcpy(reply, "not available"); }
 	virtual void formatMtNeighbours(char* reply, size_t cap, size_t page, bool recent) { (void)cap; (void)page; (void)recent; strcpy(reply, "not available"); }

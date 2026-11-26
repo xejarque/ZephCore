@@ -306,6 +306,7 @@ public:
   // CommonCLICallbacks
   void applyTempRadioParams(float freq, float bw, uint8_t sf, uint8_t cr, int timeout_mins) override;
   bool formatFileSystem() override;
+  void formatRescueReply(char* reply, size_t cap) override { _store->formatRescueReply(reply, cap); }
   void sendSelfAdvertisement(int delay_millis, bool flood) override;
   void updateAdvertTimer() override;
   void updateFloodAdvertTimer() override;

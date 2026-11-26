@@ -71,6 +71,26 @@ void RepeaterDataStore::syncRescueCopyAtBoot(uint32_t now) {
 #endif
 }
 
+void RepeaterDataStore::noteAdminCommand() {
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	_rescue.noteCommand();
+#endif
+}
+
+void RepeaterDataStore::followRescueCopy() {
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	_rescue.followIfDue();
+#endif
+}
+
+void RepeaterDataStore::formatRescueReply(char *reply, size_t cap) {
+#if IS_ENABLED(CONFIG_ZEPHTACORE_RESCUE_COPY)
+	_rescue.report(reply, cap);
+#else
+	snprintf(reply, cap, "Error: not available on this board");
+#endif
+}
+
 bool RepeaterDataStore::hasRoleData() const {
 	char path[64];
 

@@ -942,6 +942,7 @@ void RoomServerMesh::formatPacketStatsReply(char* reply) {
 
 // ZEPHCORE: ours. Reply-header budget, blank lines, room.post.
 void RoomServerMesh::handleCommand(uint32_t sender_timestamp, char* command, char* reply) {
+  _store->noteAdminCommand();  // ZEPHCORE: the rescue copy follows what it changes
   if (region_load_active) {
     handleRegionLoadLine(sender_timestamp, command, reply);
     return;

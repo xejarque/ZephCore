@@ -1158,6 +1158,11 @@
       "source": "tests/unit/rescue_tests.cpp"
     },
     {
+      "id": "UNIT-RESCUE-017",
+      "name": "z.rescue names each entry, the restores and the time of the last one in one remote reply",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
       "id": "UNIT-RX-001",
       "name": "Frames are counted by hops crossed, 7 or more together, unknown apart; empty buckets are left out",
       "source": "tests/unit/rxstats_tests.cpp"

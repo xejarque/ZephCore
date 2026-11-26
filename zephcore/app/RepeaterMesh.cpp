@@ -1488,6 +1488,7 @@ void RepeaterMesh::clearStats() {
 
 // ZEPHCORE: ours. Reply-header budget, blank lines, uplink and neighbour CLI.
 void RepeaterMesh::handleCommand(uint32_t sender_timestamp, char* command, char* reply) {
+  _store->noteAdminCommand();  // ZEPHCORE: the rescue copy follows what it changes
   if (region_load_active) {
     handleRegionLoadLine(sender_timestamp, command, reply);
     return;

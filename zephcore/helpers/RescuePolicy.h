@@ -19,6 +19,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 #include <zephyr/sys/crc.h>
 
 namespace rescue {
@@ -86,6 +87,38 @@ inline size_t chunkLength(size_t length, size_t index)
 inline bool storable(size_t length)
 {
 	return length > 0 && length <= MAX_FILE_SIZE;
+}
+
+inline const char *stateName(State state)
+{
+	switch (state) {
+	case State::Valid: return "ok";
+	case State::Absent: return "none";
+	case State::Broken: return "broken";
+	default: return "unreadable";
+	}
+}
+
+/* The reply of "get z.rescue", short enough for one remote reply. */
+inline void formatReport(char *out, size_t cap, const State (&states)[ITEM_COUNT],
+			 const Restores &restores)
+{
+	const int n = snprintf(out, cap, "> identity %s, prefs %s, regions %s | restores %u",
+			       stateName(states[0]), stateName(states[1]), stateName(states[2]),
+			       (unsigned)restores.count);
+
+	if (restores.count == 0 || n < 0 || (size_t)n >= cap) {
+		return;
+	}
+	const time_t when = (time_t)restores.last_epoch;
+	struct tm utc;
+
+	if (restores.last_epoch == 0 || gmtime_r(&when, &utc) == nullptr) {
+		snprintf(out + n, cap - n, ", last at unknown time");
+		return;
+	}
+	snprintf(out + n, cap - n, ", last %04d-%02d-%02d %02d:%02d UTC", utc.tm_year + 1900,
+		 utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min);
 }
 
 template <class Store, class Files>
@@ -183,6 +216,8 @@ public:
 		}
 		return true;
 	}
+
+	void report(char *out, size_t cap) { formatReport(out, cap, _states, restores()); }
 
 	Restores restores()
 	{

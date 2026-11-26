@@ -34,11 +34,14 @@ public:
 	bool begin();
 
 	/* The rescue copy of identity, prefs and regions (ADR 0021). Without
-	 * CONFIG_ZEPHTACORE_RESCUE_COPY the format is a plain one and the other
-	 * two do nothing. */
+	 * CONFIG_ZEPHTACORE_RESCUE_COPY the format is a plain one, the report
+	 * says so and the rest does nothing. */
 	void openRescueCopy();            /* first, before any format */
 	bool formatForFirstBoot();
 	void syncRescueCopyAtBoot(uint32_t now);  /* after begin(), before loading */
+	void noteAdminCommand();
+	void followRescueCopy();          /* main loop, after commands have run */
+	void formatRescueReply(char *reply, size_t cap);
 
 	/* Identity management */
 	bool loadIdentity(mesh::LocalIdentity& id);

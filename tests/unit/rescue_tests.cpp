@@ -317,3 +317,27 @@ TEST(rescue_restore_count, "UNIT-RESCUE-016", "restores add up across boots and 
     CHECK(third.copy.restores().count == 2);
     CHECK(third.copy.restores().last_epoch == 0);
 }
+
+TEST(rescue_report, "UNIT-RESCUE-017", "z.rescue names each entry, the restores and the time of the last one in one remote reply") {
+    Node node;
+    node.files.files.erase(Item::Regions);
+    Boot first(node);
+    char reply[161];
+    first.copy.report(reply, sizeof(reply));
+    CHECK(std::string(reply) == "> identity ok, prefs ok, regions none | restores 0");
+
+    node.files.files.erase(Item::Identity);
+    Boot second(node, 1795687920);
+    second.copy.report(reply, sizeof(reply));
+    CHECK(std::string(reply) == "> identity ok, prefs ok, regions none | restores 1, last 2026-11-26 10:12 UTC");
+
+    node.files.files.erase(Item::Identity);
+    Boot third(node, 5);
+    third.copy.report(reply, sizeof(reply));
+    CHECK(std::string(reply) == "> identity ok, prefs ok, regions none | restores 2, last at unknown time");
+
+    const State worst[] = {State::Unreadable, State::Unreadable, State::Unreadable};
+    rescue::formatReport(reply, sizeof(reply), worst, {UINT32_MAX, UINT32_MAX});
+    CHECK(std::string(reply).find(" UTC") != std::string::npos);
+    CHECK(std::string(reply).size() < 150);             // leaves room for the reply header
+}

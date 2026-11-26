@@ -461,6 +461,10 @@ bool CommonCLI::handleZCmd(uint32_t sender_timestamp, const char* command, char*
 		replyZStats(replyCap(sender_timestamp), reply);
 		return true;
 	}
+	if (strcmp(command, "get z.rescue") == 0) {
+		_callbacks->formatRescueReply(reply, replyCap(sender_timestamp));
+		return true;
+	}
 	if (ping::isCommand(command)) {
 		ping::Stats* stats = _callbacks->pingStats();
 #if !IS_ENABLED(CONFIG_ZEPHTACORE_MESHTASTIC)
