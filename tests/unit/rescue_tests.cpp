@@ -48,8 +48,13 @@ struct FakeFiles {
     std::map<Item, std::string> files;
     std::set<Item> damaged;     // there, but its owner cannot load it
     bool writable = true;
+    int load_checks = 0;
 
-    bool loads(Item item) { return files.count(item) != 0 && damaged.count(item) == 0; }
+    bool loads(Item item)
+    {
+        load_checks++;
+        return files.count(item) != 0 && damaged.count(item) == 0;
+    }
     size_t size(Item item) { return files.count(item) ? files[item].size() : 0; }
     bool read(Item item, size_t offset, uint8_t *buf, size_t len)
     {
@@ -340,4 +345,16 @@ TEST(rescue_report, "UNIT-RESCUE-017", "z.rescue names each entry, the restores 
     rescue::formatReport(reply, sizeof(reply), worst, {UINT32_MAX, UINT32_MAX});
     CHECK(std::string(reply).find(" UTC") != std::string::npos);
     CHECK(std::string(reply).size() < 150);             // leaves room for the reply header
+}
+
+TEST(rescue_unchanged_not_loaded, "UNIT-RESCUE-018", "a command loads only the files that differ from the copy") {
+    Node node;
+    Boot boot(node);
+    node.files.load_checks = 0;
+    boot.copy.followFiles();
+    CHECK(node.files.load_checks == 0);
+
+    node.files.files[Item::Prefs][0] ^= 1;
+    boot.copy.followFiles();
+    CHECK(node.files.load_checks == 1);
 }

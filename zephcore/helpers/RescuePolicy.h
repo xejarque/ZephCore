@@ -174,7 +174,7 @@ public:
 	void followFiles()
 	{
 		for (Item item : ITEMS) {
-			if (_files.loads(item) && !holds(item)) {
+			if (!holds(item) && _files.loads(item)) {
 				save(item);
 			}
 		}

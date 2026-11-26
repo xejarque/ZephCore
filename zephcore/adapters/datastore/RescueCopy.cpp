@@ -97,7 +97,15 @@ int RescueStore::read(const char *key, void *buf, size_t cap)
 
 bool RescueStore::write(const char *key, const void *data, size_t len)
 {
-	return _ready && settings_save_one(key, data, len) == 0;
+	if (!_ready) {
+		return false;
+	}
+	int rc = settings_save_one(key, data, len);
+
+	if (rc != 0) {
+		LOG_WRN("%s not written (%d)", key, rc);
+	}
+	return rc == 0;
 }
 
 void RescueStore::erase(const char *key)

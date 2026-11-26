@@ -1168,6 +1168,11 @@
       "source": "tests/unit/rescue_tests.cpp"
     },
     {
+      "id": "UNIT-RESCUE-018",
+      "name": "a command loads only the files that differ from the copy",
+      "source": "tests/unit/rescue_tests.cpp"
+    },
+    {
       "id": "UNIT-RX-001",
       "name": "Frames are counted by hops crossed, 7 or more together, unknown apart; empty buckets are left out",
       "source": "tests/unit/rxstats_tests.cpp"
