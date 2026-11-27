@@ -8,12 +8,13 @@ const CDN = "https://xejarque.github.io/ZephCore/firmware/";
 const catalog = {
   device: [{ firmware: [{ role: "companionUsb", version: { "1.18.2": { files: [
     { name: "t1000_e-companion-zephtacore-abc1234.uf2", url: CDN + "t1000_e-companion-zephtacore-abc1234.uf2" },
-    { name: "t1000_e-companion-zephtacore-abc1234.zip", url: CDN + "t1000_e-companion-zephtacore-abc1234.zip" }
+    { name: "t1000_e-companion-zephtacore-abc1234.zip", url: CDN + "t1000_e-companion-zephtacore-abc1234.zip" },
+    { name: "t1000_e-repeater-zephtacore-abc1234.zip", url: CDN + "t1000_e-repeater-zephtacore-abc1234.zip" }
   ] } } }] }]
 };
 
 // Runs initFlasherCore against a minimal DOM and a fake catalog fetch.
-async function loadPage({ fetchOk = true, board = "t1000_e", esptool = null, boards = null, install = "keep", serial = true, nrf = null, pending = null } = {}) {
+async function loadPage({ fetchOk = true, board = "t1000_e", esptool = null, boards = null, install = "keep", serial = true, nrf = null, pending = null, node = null, role = "companion" } = {}) {
   const els = {};
   const downloads = [];
   const el = (id) =>
@@ -33,7 +34,7 @@ async function loadPage({ fetchOk = true, board = "t1000_e", esptool = null, boa
   };
   const win = {
     ZephtacoreLogic: L,
-    ZephtacoreSerial: { log() {} },
+    ZephtacoreSerial: node ? node.serial : { log() {}, connect: async () => false, disconnect: async () => {} },
     ZephtacoreEsptool: esptool,
     ZephtacoreNrf: nrf,
     ZEPHTACORE_BOARDS: boards || [
@@ -41,22 +42,44 @@ async function loadPage({ fetchOk = true, board = "t1000_e", esptool = null, boa
       { id: "rak4631", name: "RAK4631", mcu: "nRF52840", radio: "SX1262", flashType: "uf2", desc: "" }
     ],
     ZEPHTACORE_ROLES: [{ id: "companion", name: "Companion" }, { id: "repeater", name: "Repeater" }, { id: "observer", name: "Observer" }],
-    location: { search: "" }
+    location: { search: "" },
+    addEventListener: (type, fn) => windowListeners.set(type, fn),
+    removeEventListener: (type) => windowListeners.delete(type)
   };
-  const store = { getItem: () => (pending ? JSON.stringify(pending) : null), setItem() {}, removeItem() {} };
-  const fetchFn = async (url) =>
-    String(url).includes("catalog.json")
+  const windowListeners = new Map();
+  const fetched = [];
+  const removed = [];
+  const store = { getItem: () => (pending ? JSON.stringify(pending) : null), setItem() {}, removeItem: (key) => removed.push(key) };
+  const alerts = [];
+  // The waits for the node's port end at once: a port that is coming has already been reported.
+  const soon = (fn, _ms, ...args) => setTimeout(fn, 0, ...args);
+  const fetchFn = async (url) => {
+    fetched.push(String(url));
+    return String(url).includes("catalog.json")
       ? { ok: fetchOk, json: async () => catalog }
       : { ok: true, arrayBuffer: async () => (String(url).endsWith(".zip") ? new TextEncoder().encode(String(url)) : new Uint8Array([1, 2, 3, 4])).buffer };
+  };
   const src = fs.readFileSync(path.join(__dirname, "../../custom_builder_web/js/flasher-core.js"), "utf8");
   el("installClean").checked = install === "clean";
   el("installKeep").checked = install !== "clean";
   els.flasherBoardSelect = { ...el("flasherBoardSelect"), value: board };
-  els.flasherRoleSelect = { ...el("flasherRoleSelect"), value: "companion" };
-  const navigatorStub = serial ? { serial: { requestPort: async () => ({ fake: "port" }) } } : {};
-  new Function("window", "document", "sessionStorage", "navigator", "fetch", "URLSearchParams", src)(win, doc, store, navigatorStub, fetchFn, URLSearchParams);
+  els.flasherRoleSelect = { ...el("flasherRoleSelect"), value: role };
+  const listeners = new Set();
+  const navigatorStub = serial ? { serial: {
+    requestPort: async () => ({ fake: "port" }),
+    addEventListener: (_type, fn) => listeners.add(fn),
+    removeEventListener: (_type, fn) => listeners.delete(fn)
+  } } : {};
+  if (node) node.plugIn = (port) => listeners.forEach((fn) => fn({ target: port }));
+  new Function("window", "document", "sessionStorage", "navigator", "fetch", "URLSearchParams", "alert", "setTimeout", src)(
+    win, doc, store, navigatorStub, fetchFn, URLSearchParams, (text) => alerts.push(text), soon);
   await new Promise((r) => setTimeout(r, 20));
   els.downloads = downloads;
+  els.alerts = alerts;
+  els.removed = removed;
+  els.listeners = listeners;
+  els.windowListeners = windowListeners;
+  els.fetched = fetched;
   return els;
 }
 
@@ -160,7 +183,7 @@ test("ESP32: the settings hint appears only when settings wait to be sent", asyn
   const withSettings = await loadPage({ ...opts, pending: { name: "Zephta-1", freq: "869.618" } });
   assert.equal(withSettings.pendingConfigBanner.style.display, "");
   await withSettings.btnUnifiedFlash.listeners.click();
-  assert.match(withSettings.flashStatusText.textContent, /pulsa "Enviar ajustes por USB"/);
+  assert.match(withSettings.flashStatusText.textContent, /No se pudo abrir el puerto.*pulsa "Enviar ajustes por USB"/);
 });
 
 test("ESP32: a clean install erases the whole flash while writing", async () => {
@@ -207,14 +230,22 @@ test("UF2 without Web Serial: keeping the data downloads only the firmware even 
 });
 
 // nRF52 with Web Serial: the Adafruit bootloader's DFU, one port choice for the whole install.
-function fakeNrf({ failFirstFlash = false, failFirstPort = false } = {}) {
+const usbPort = (usbProductId) => ({ getInfo: () => ({ usbVendorId: 0x239a, usbProductId }) });
+const RUNNING_PORT = usbPort(0x8029);
+// appears: the port the browser reports after the touch, when it already has permission for one.
+function fakeNrf({ failFirstFlash = false, failFirstPort = false, node = null, appears = null, hold = null } = {}) {
   const calls = [];
   let failed = false;
   let portFailed = false;
   return {
     calls,
     module: {
-      async touchBootloader() { calls.push("touch"); },
+      async touchBootloader() {
+        calls.push("touch");
+        if (appears) node.plugIn(appears);
+        return RUNNING_PORT;
+      },
+      trackPort: (port) => port,
       async requestPort() {
         if (failFirstPort && !portFailed) { portFailed = true; throw Object.assign(new Error("No port selected"), { name: "NotFoundError" }); }
         calls.push("port");
@@ -225,9 +256,15 @@ function fakeNrf({ failFirstFlash = false, failFirstPort = false } = {}) {
       async flashNrf(pkg, hooks) {
         if (failFirstFlash && !failed) { failed = true; throw new Error("La placa no responde"); }
         calls.push("flash " + pkg.url.split("/").pop());
+        await hold;
         hooks.onConnected();
-        hooks.onStage("write");
-        hooks.onProgress("write", 1);
+        for (const stage of ["start", "erase", "init", "write", "activate"]) {
+          hooks.onStage(stage);
+          hooks.onProgress(stage, 1);
+        }
+        // The board reboots into the application and shows up as a serial port.
+        if (node) node.plugIn(node.port);
+        node?.flashed.push(hooks.port);
       }
     }
   };
@@ -362,4 +399,170 @@ test("nRF52 DFU clean install checks erase_sha256, not erase_uf2_sha256", async 
     delete fw.erase_sha256;
     delete fw.erase_uf2_sha256;
   }
+});
+
+test("nRF52: the progress bar never goes back during a clean install", async () => {
+  catalog.device[0].firmware[0].erase = CDN + "SoftDevice_v7_formatter.zip";
+  try {
+    const els = await loadPage({ nrf: fakeNrf().module, install: "clean" });
+    const widths = [];
+    Object.defineProperty(els.flashProgressBar.style, "width", { set: (w) => widths.push(parseInt(w, 10)), get: () => "" });
+    await els.btnUnifiedFlash.listeners.click();
+    assert.equal(widths.at(-1), 100);
+    assert.deepEqual(widths, [...widths].sort((a, b) => a - b));
+  } finally {
+    delete catalog.device[0].firmware[0].erase;
+  }
+});
+
+const SETTINGS = {
+  name: "Repe", role: "repeater", adminPass: "secreta", freq: "869.618", bw: "62.5", sf: "7", cr: "2", txPower: "",
+  mtRelay: "essential", mtOpaque: true, mtHops: "7"
+};
+
+// A node on the serial port that answers like the firmware; replies overrides what a command gets.
+function fakeNode({ role = "repeater", replies = {} } = {}) {
+  const node = { port: { id: "node" }, sent: [], opened: [], flashed: [], closed: 0 };
+  let open = false;
+  node.serial = {
+    log() {},
+    async connect(port) { node.opened.push(port); open = true; return true; },
+    async disconnect() { node.closed++; open = false; },
+    isConnected: () => open,
+    async sendCommand(cmd) { node.sent.push(cmd); return true; },
+    async sendCommandAndWait(cmd) {
+      node.sent.push(cmd);
+      const normal = cmd === "get role" ? `> ${role}` : cmd.startsWith("password ") ? `password now: ${cmd.slice(9)}` : "OK";
+      return { sent: true, timedOut: false, text: cmd in replies ? replies[cmd] : normal };
+    }
+  };
+  return node;
+}
+
+async function flashWithSettings(node) {
+  const els = await loadPage({ nrf: fakeNrf({ node }).module, pending: SETTINGS, node, role: "repeater" });
+  await els.btnUnifiedFlash.listeners.click();
+  return els;
+}
+
+test("after an install the pending settings go to the port the board comes up on", async () => {
+  const node = fakeNode();
+  const els = await flashWithSettings(node);
+  assert.deepEqual(node.opened, [node.port]);
+  assert.deepEqual(node.sent.slice(0, 3), ["get role", "set name Repe", "password secreta"]);
+  assert.equal(node.sent.at(-1), "reboot");
+  assert.deepEqual(els.removed, ["zephtacore_pending_config"]);
+  assert.match(els.alerts[0], /^Configuración enviada[\s\S]*Clave de administrador: la de tus ajustes/);
+  assert.match(els.flashStatusText.textContent, /^Ajustes enviados/);
+  assert.equal(els.listeners.size, 0);
+});
+
+test("settings already sent are not sent again by a later install", async () => {
+  const node = fakeNode();
+  const els = await flashWithSettings(node);
+  const sent = node.sent.length;
+  await els.btnUnifiedFlash.listeners.click();
+  assert.equal(node.sent.length, sent);
+});
+
+test("without a port after the install, the person is told to send the settings", async () => {
+  const els = await loadPage({ nrf: fakeNrf().module, pending: SETTINGS, role: "repeater" });
+  await els.btnUnifiedFlash.listeners.click();
+  assert.match(els.flashStatusText.textContent, /Firmware instalado\. Cuando la placa arranque, pulsa "Enviar ajustes por USB"/);
+  assert.equal(els.listeners.size, 0);
+});
+
+test("a node of another role gets nothing but the question", async () => {
+  const node = fakeNode({ role: "companion" });
+  const els = await flashWithSettings(node);
+  assert.deepEqual(node.sent, ["get role"]);
+  assert.deepEqual(els.removed, []);
+  assert.match(els.alerts[0], /"companion" y los ajustes son para "repeater"/);
+});
+
+test("a password the node does not confirm stops the send, says so and keeps the settings", async () => {
+  const node = fakeNode({ replies: { "password secreta": "OK" } });
+  const els = await flashWithSettings(node);
+  assert.equal(node.sent.at(-1), "password secreta");
+  assert.deepEqual(els.removed, []);
+  assert.match(els.alerts[0], /^Envío interrumpido en "password ••••"[\s\S]*siguen pendientes/);
+  assert.ok(!els.alerts[0].includes("secreta"));
+});
+
+test("no board is preselected: nothing is offered to flash until one is chosen", async () => {
+  const els = await loadPage({ board: "" });
+  assert.match(els.flasherBoardSelect.innerHTML, /^<option value="" disabled selected>Elige tu placa/);
+  assert.equal(els.btnUnifiedFlash.disabled, true);
+  assert.equal(els.btnUnifiedFlash.textContent, "Elige tu placa para grabar");
+  assert.equal(els.boardPreviewBox.style.display, "none");
+  assert.equal(els.installModeBox.style.display, "none");
+});
+
+test("the list marks the boards the catalog has no build for", async () => {
+  const els = await loadPage();
+  assert.match(els.flasherBoardSelect.innerHTML, /RAK4631 — \[nRF52840\] · sin build</);
+  assert.match(els.flasherBoardSelect.innerHTML, /T1000-E — \[nRF52840\]</);
+});
+
+test("while flashing, a second click does nothing, the controls are off and leaving is warned about", async () => {
+  let release;
+  const nrf = fakeNrf({ hold: new Promise((resolve) => (release = resolve)) });
+  const els = await loadPage({ nrf: nrf.module });
+  const flashing = els.btnUnifiedFlash.listeners.click();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual([els.btnUnifiedFlash.disabled, els.flasherBoardSelect.disabled, els.btnBackupSave.disabled], [true, true, true]);
+  assert.ok(els.windowListeners.has("beforeunload"));
+  await els.btnUnifiedFlash.listeners.click();
+  release();
+  await flashing;
+  assert.deepEqual(nrf.calls, ["touch", "port", "flash " + FIRMWARE_ZIP]);
+  assert.deepEqual([els.btnUnifiedFlash.disabled, els.flasherBoardSelect.disabled, els.btnBackupSave.disabled], [false, false, false]);
+  assert.equal(els.windowListeners.has("beforeunload"), false);
+});
+
+test("an open console is closed before flashing", async () => {
+  const node = fakeNode();
+  await node.serial.connect(node.port);
+  const els = await loadPage({ nrf: fakeNrf().module, node });
+  await els.btnUnifiedFlash.listeners.click();
+  assert.equal(node.closed, 1);
+});
+
+test("nRF52: a bootloader port the browser already allows is used without asking for it", async () => {
+  const bootloader = usbPort(0x0029);
+  const node = fakeNode();
+  const nrf = fakeNrf({ node, appears: bootloader });
+  const els = await loadPage({ nrf: nrf.module, node });
+  await els.btnUnifiedFlash.listeners.click();
+  assert.deepEqual(nrf.calls, ["touch", "flash " + FIRMWARE_ZIP]);
+  assert.deepEqual(node.flashed, [bootloader]);
+});
+
+test("nRF52: the application coming back after the touch is not taken for the bootloader", async () => {
+  const node = fakeNode();
+  const nrf = fakeNrf({ node, appears: usbPort(0x8029) });
+  const els = await loadPage({ nrf: nrf.module, node });
+  await els.btnUnifiedFlash.listeners.click();
+  assert.deepEqual(nrf.calls, ["touch", "port", "flash " + FIRMWARE_ZIP]);
+});
+
+test("nRF52: the DFU package is downloaded when the board is chosen, and only once", async () => {
+  const els = await loadPage({ nrf: fakeNrf().module });
+  const zips = () => els.fetched.filter((url) => url.endsWith(".zip"));
+  assert.equal(zips().length, 1);
+  await els.btnUnifiedFlash.listeners.click();
+  assert.equal(zips().length, 1);
+});
+
+test("a board without GPS gets every other setting and the reboot, and the person is told", async () => {
+  const node = fakeNode({ replies: { "gps off": "gps toggle not found" } });
+  const els = await loadPage({ nrf: fakeNrf({ node }).module, pending: { ...SETTINGS, gps: "off" }, node, role: "repeater" });
+  await els.btnUnifiedFlash.listeners.click();
+  assert.equal(node.sent.at(-1), "reboot");
+  assert.match(els.alerts[0], /^Configuración enviada[\s\S]*no detecta ningún GPS[\s\S]*los demás comandos/);
+});
+
+test("the pending settings banner goes away once they are sent", async () => {
+  const els = await flashWithSettings(fakeNode());
+  assert.equal(els.pendingConfigBanner.style.display, "none");
 });

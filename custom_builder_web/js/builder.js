@@ -52,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnCopyWest = document.getElementById("btnCopyWest");
   const btnDownloadConf = document.getElementById("btnDownloadConf");
 
+  const PENDING_KEY = "zephtacore_pending_config";
   let selectedBoard = window.ZEPHTACORE_BOARDS[0];
   let selectedRole = window.ZEPHTACORE_ROLES[0];
 
@@ -169,7 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
       bw: bwSelect ? bwSelect.value : "62.5",
       sf: sfSlider ? sfSlider.value : "7",
       cr: crSelect ? crSelect.value : "2",
-      txPower: txPowerInput ? txPowerInput.value : "22",
+      txPower: txPowerInput ? txPowerInput.value.trim() : "",
       mtRelay: mtRelaySelect ? mtRelaySelect.value : "essential",
       mtOpaque: mtOpaqueCheck ? mtOpaqueCheck.checked : true,
       mtHops: mtHopsInput ? mtHopsInput.value : "7",
@@ -188,7 +189,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function saveCurrentConfig() {
     const cfg = getCurrentConfig();
-    sessionStorage.setItem("zephtacore_pending_config", JSON.stringify(cfg));
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify(cfg));
+  }
+
+  function savedConfig() {
+    try {
+      return JSON.parse(sessionStorage.getItem(PENDING_KEY));
+    } catch (e) {
+      console.warn("Error parsing pending config:", e);
+      return null;
+    }
+  }
+
+  // Fills the form with the settings still waiting to be sent, so that coming back does not replace them.
+  function restoreForm() {
+    const saved = savedConfig();
+    if (!saved) return false;
+    selectedBoard = window.ZEPHTACORE_BOARDS.find((b) => b.id === saved.boardId) || selectedBoard;
+    selectedRole = window.ZEPHTACORE_ROLES.find((r) => r.id === saved.role) || selectedRole;
+    [
+      [nodeNameInput, saved.name], [adminPassInput, saved.adminPass], [guestPassInput, saved.guestPass],
+      [nodeLatInput, saved.lat], [nodeLonInput, saved.lon], [gpsModeSelect, saved.gps],
+      [freqInput, saved.freq], [bwSelect, saved.bw], [sfSlider, saved.sf], [crSelect, saved.cr],
+      [txPowerInput, saved.txPower], [mtRelaySelect, saved.mtRelay], [mtHopsInput, saved.mtHops],
+      [vroomAccessSelect, saved.vroomAccess], [vroomPassInput, saved.vroomPass]
+    ].forEach(([input, value]) => {
+      if (input && value !== undefined) input.value = value;
+    });
+    [[mtOpaqueCheck, saved.mtOpaque], [pingBotCheck, saved.pingBot], [vroomEnableCheck, saved.vroomEnable]].forEach(([box, checked]) => {
+      if (box && checked !== undefined) box.checked = checked;
+    });
+    if (saved.autoShutdownMv && autoShutdownCheck && autoShutdownInput) {
+      autoShutdownCheck.checked = true;
+      autoShutdownInput.value = saved.autoShutdownMv;
+      // Marks the value as this board's, so that the board's suggestion does not replace it.
+      autoShutdownInput.dataset.board = selectedBoard.id;
+    }
+    return true;
   }
 
   function syncVroomVisibility() {
@@ -271,8 +308,7 @@ document.addEventListener("DOMContentLoaded", () => {
 # build options: set them after flashing, over USB.
 CONFIG_ZEPHTACORE_MESHTASTIC=y
 CONFIG_ZEPHTACORE_MT_HOP_LIMIT=${cfg.mtHops}
-CONFIG_ZEPHCORE_DEFAULT_TX_POWER_DBM=${cfg.txPower}
-CONFIG_ZEPHCORE_ADMIN_PASSWORD=${kconfigString(cfg.adminPass)}
+${cfg.txPower ? `CONFIG_ZEPHCORE_DEFAULT_TX_POWER_DBM=${cfg.txPower}\n` : ""}CONFIG_ZEPHCORE_ADMIN_PASSWORD=${kconfigString(cfg.adminPass)}
 ${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)}\n` : ""}`;
 
       const blob = new Blob([conf], { type: "text/plain" });
@@ -289,12 +325,15 @@ ${cfg.guestPass ? `CONFIG_ZEPHCORE_GUEST_PASSWORD=${kconfigString(cfg.guestPass)
     }
   }
 
+  const restored = restoreForm();
+
   // Generate a random unique node name on initial page load if empty or generic
   if (nodeNameInput && (!nodeNameInput.value || nodeNameInput.value === "ZephtaNode")) {
     rollRandomName();
   }
 
-  if (adminPassInput && !adminPassInput.value) {
+  // A pending empty password was left empty on purpose.
+  if (!restored && adminPassInput && !adminPassInput.value) {
     adminPassInput.value = generateSecurePass(12);
   }
 

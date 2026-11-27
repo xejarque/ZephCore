@@ -6,7 +6,7 @@
     <title>Zephtacore · Flasher Web USB &amp; Consola Serie</title>
     <meta
       name="description"
-      content="Flashea Zephtacore directamente desde el navegador por Web Serial (ESP32) o instrucciones UF2 (nRF52), e interactúa con el nodo mediante la consola serie integrada."
+      content="Instala Zephtacore desde el navegador (ESP32 y nRF52 por USB, o con un fichero UF2) y usa la consola serie integrada."
     />
     <link rel="icon" type="image/svg+xml" href="logo.svg" />
     <link rel="stylesheet" href="css/theme.css" />
@@ -125,7 +125,7 @@
         <!-- Settings the Builder left waiting to be sent -->
         <div id="pendingConfigBanner" class="install-step" style="display: none;">
           <h2 class="card-title">Ajustes por enviar</h2>
-          <p class="card-subtitle">Cuando la placa arranque con el firmware nuevo, envíale estos ajustes por USB.</p>
+          <p class="card-subtitle">Al terminar de grabar se envían solos si el navegador ya tiene permiso sobre el puerto de la placa. Si no, pulsa el botón cuando arranque.</p>
           <div class="config-pills-row">
             <span class="tag-badge tag-cyan" id="cfgBadgeName"></span>
             <span class="tag-badge tag-emerald" id="cfgBadgeFreq"></span>

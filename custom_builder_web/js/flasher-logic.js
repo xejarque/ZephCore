@@ -12,8 +12,14 @@
     return n <= 4 ? n + 4 : n;
   }
 
+  // The ping bot answers on a companion and a repeater only, on each mesh on its own.
+  const PING_BOT_ROLES = ["companion", "repeater"];
+
   function buildConfigCommands(cfg, nowEpoch = Math.floor(Date.now() / 1000)) {
     const cr = firmwareCodingRate(cfg.cr);
+    const pingBot = cfg.pingBot && PING_BOT_ROLES.includes(cfg.role);
+    // A companion starts as client_mute, which repeats nothing whatever its relay policy says.
+    const repeatingCompanion = cfg.role === "companion" && ["essential", "all"].includes(cfg.mtRelay);
 
     if (cfg.role === "observer") {
       return [
@@ -34,12 +40,15 @@
       cfg.adminPass && cfg.role !== "companion" ? `password ${cfg.adminPass}` : null,
       cfg.guestPass && cfg.role !== "companion" ? `set guest.password ${cfg.guestPass}` : null,
       `set radio ${cfg.freq},${cfg.bw},${cfg.sf},${cr}`,
-      `set tx ${cfg.txPower}`,
+      // Unset keeps the board's default, which is lower where an external amplifier follows the radio.
+      cfg.txPower ? `set tx ${cfg.txPower}` : null,
       `set z.mt.enable on`,
       `set z.mt.relay ${cfg.mtRelay}`,
+      repeatingCompanion ? `set z.mt.role client` : null,
       `set z.mt.relay.opaque ${cfg.mtOpaque ? "on" : "off"}`,
       `set z.mt.hops ${cfg.mtHops}`,
-      cfg.pingBot ? `set z.mt.ping.enable on /ping` : null,
+      pingBot ? `set z.mc.ping.enable on /ping` : null,
+      pingBot ? `set z.mt.ping.enable on /ping` : null,
       cfg.role === "repeater" && cfg.vroomEnable ? `set z.room.access ${cfg.vroomAccess || "open"}` : null,
       cfg.role === "repeater" && cfg.vroomEnable && cfg.vroomPass ? `set z.room.password ${cfg.vroomPass}` : null,
       cfg.role === "repeater" && cfg.vroomEnable ? `set z.room.on on` : null,
@@ -47,7 +56,6 @@
       cfg.lon ? `set lon ${cfg.lon}` : null,
       cfg.autoShutdownMv ? `set z.autoshutdown ${cfg.autoShutdownMv}` : null,
       Number.isInteger(nowEpoch) && nowEpoch > 0 ? `time ${nowEpoch}` : null,
-      // A board without GPS refuses it, which stops the send: everything else is applied by then.
       cfg.gps ? `gps ${cfg.gps}` : null,
       `reboot`
     ].filter(Boolean);
@@ -116,6 +124,48 @@
     return REFUSED.test(reply || "");
   }
 
+  // The role a node answers "get role" with, "" when the reply is not one.
+  function nodeRole(reply) {
+    const m = /^> ([a-z_]+)$/.exec(reply || "");
+    return m ? m[1] : "";
+  }
+
+  // Why the reply to a command does not accept it, "" when it does. The password is confirmed by the
+  // node echoing it, which also shows one it cut short.
+  function refusalReason(cmd, reply) {
+    if (isErrorReply(reply)) return `el nodo respondió: ${reply}`;
+    if (cmd.startsWith("password ") && reply !== `password now: ${cmd.slice("password ".length)}`) {
+      return "el nodo no confirmó la clave de administrador tal como se escribió (máximo 15 bytes)";
+    }
+    return "";
+  }
+
+  // A refusal that leaves the other settings applicable: what to tell the person, "" for any other.
+  function skippedSetting(cmd, reply) {
+    return cmd.startsWith("gps ") && /gps toggle not found/i.test(reply || "")
+      ? "La placa no detecta ningún GPS: ese ajuste no se ha aplicado."
+      : "";
+  }
+
+  // Runs task with the controls disabled, then leaves each one as it was.
+  async function withDisabled(controls, task) {
+    const present = controls.filter(Boolean);
+    const before = present.map((c) => c.disabled);
+    present.forEach((c) => (c.disabled = true));
+    try {
+      return await task();
+    } finally {
+      present.forEach((c, i) => (c.disabled = before[i]));
+    }
+  }
+
+  // Share of one nRF52 DFU package done. Each stage takes the next slice, so the bar never goes back.
+  const DFU_SLICES = { start: [0, 0], erase: [0, 0.2], init: [0.2, 0.2], write: [0.2, 0.85], activate: [0.85, 1] };
+  function dfuProgress(stage, fraction) {
+    const [from, to] = DFU_SLICES[stage];
+    return from + (to - from) * fraction;
+  }
+
   // True when the catalog gives no sha256 for a file or its bytes have that SHA-256.
   async function sha256Matches(bytes, expected, subtle) {
     if (!expected) return true;
@@ -125,7 +175,7 @@
     return hex === String(expected).toLowerCase();
   }
 
-  const api = { nodeReply, isErrorReply, maskedCommand, sha256Matches, firmwareCodingRate, buildConfigCommands, catalogFiles, findCatalogFile, formatterUrl, kconfigString, shellQuote };
+  const api = { nodeReply, isErrorReply, nodeRole, refusalReason, skippedSetting, withDisabled, dfuProgress, maskedCommand, sha256Matches, firmwareCodingRate, buildConfigCommands, catalogFiles, findCatalogFile, formatterUrl, kconfigString, shellQuote };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.ZephtacoreLogic = api;
 })(typeof window !== "undefined" ? window : globalThis);

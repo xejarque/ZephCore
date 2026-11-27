@@ -30,23 +30,28 @@ export function openDfuZip(bytes) {
 }
 
 /**
- * Reboots a running node into the bootloader. The board then shows up as a different USB device,
- * so the person has to pick the port again (the browser asks for a click each time) before flashing.
+ * Reboots a running node into the bootloader and returns the port it was running on. The board then
+ * shows up as a different USB device, which the browser has its own permission for.
  */
 export async function touchBootloader() {
   const port = await navigator.serial.requestPort();
   await port.open({ baudRate: TOUCH_BAUDRATE });
   await sleep(TOUCH_SETTLE_MS);
   await port.close();
+  return port;
 }
 
 const disconnected = new WeakSet();
 
-/** Asks for the bootloader's port, and notes when it goes away. */
-export async function requestPort() {
-  const port = await navigator.serial.requestPort();
+/** Notes when the port goes away, which waitForPort relies on. */
+export function trackPort(port) {
   port.addEventListener("disconnect", () => disconnected.add(port));
   return port;
+}
+
+/** Asks for the bootloader's port. */
+export async function requestPort() {
+  return trackPort(await navigator.serial.requestPort());
 }
 
 /**
@@ -63,10 +68,7 @@ export async function waitForPort(previous, timeoutMs) {
         const info = p.getInfo();
         return info.usbVendorId === usbVendorId && info.usbProductId === usbProductId;
       });
-      if (found) {
-        found.addEventListener("disconnect", () => disconnected.add(found));
-        return found;
-      }
+      if (found) return trackPort(found);
     }
     await sleep(500);
   }

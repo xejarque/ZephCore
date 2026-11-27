@@ -94,3 +94,12 @@ test("the Builder's link opens the section", () => {
   assert.equal(loadSection({ hash: "#backupSection" }).els.backupSection.open, true);
   assert.equal(loadSection().els.backupSection.open, false);
 });
+
+test("the flash buttons are off while the node is being read", async () => {
+  const { els, log } = loadSection();
+  const click = els.btnBackupSave.listeners.click();
+  assert.equal(els.btnUnifiedFlash.disabled, true);
+  await click;
+  assert.equal(Boolean(els.btnUnifiedFlash.disabled), false);
+  assert.ok(log.includes("disconnect"));
+});

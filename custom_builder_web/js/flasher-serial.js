@@ -28,7 +28,9 @@ window.ZephtacoreSerial = (function () {
     el.scrollTop = el.scrollHeight;
   }
 
-  async function connect() {
+  // Opens the given port, or asks the person for one when none is given.
+  async function connect(given = null) {
+    if (isConnected && given && given !== port) await disconnect();
     if (isConnected) return true;
     if (!("serial" in navigator)) {
       alert("Tu navegador no soporta Web Serial API. Por favor usa Google Chrome, Microsoft Edge o Opera en escritorio.");
@@ -36,7 +38,7 @@ window.ZephtacoreSerial = (function () {
     }
 
     try {
-      port = await navigator.serial.requestPort();
+      port = given || (await navigator.serial.requestPort());
       await port.open({ baudRate: 115200 });
 
       isConnected = true;

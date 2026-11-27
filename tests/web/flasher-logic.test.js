@@ -32,9 +32,9 @@ test("repeater and companion commands follow docs/CLI_commands.md", () => {
 });
 
 test("no password is sent when none is set; ping bot carries its command; position only when set", () => {
-  const cmds = L.buildConfigCommands({ ...cfg, adminPass: "", pingBot: true, lat: "41.4", lon: "2.1", mtOpaque: false });
+  const cmds = L.buildConfigCommands({ ...cfg, role: "repeater", adminPass: "", pingBot: true, lat: "41.4", lon: "2.1", mtOpaque: false });
   assert.ok(!cmds.some((c) => c.startsWith("password")));
-  assert.ok(cmds.includes("set z.mt.ping.enable on /ping"));
+  assert.ok(cmds.includes("set z.mc.ping.enable on /ping") && cmds.includes("set z.mt.ping.enable on /ping"));
   assert.ok(cmds.includes("set z.mt.relay.opaque off"));
   assert.ok(cmds.includes("set lat 41.4") && cmds.includes("set lon 2.1"));
   assert.equal(cmds.at(-1), "reboot");
@@ -49,7 +49,6 @@ test("guest password, GPS and auto-shutdown are sent only when chosen", () => {
   const none = L.buildConfigCommands({ ...cfg, role: "repeater", guestPass: "", gps: "", autoShutdownMv: "" });
   assert.ok(!none.some((c) => /guest|^gps|autoshutdown/.test(c)));
   const all = L.buildConfigCommands({ ...cfg, role: "repeater", guestPass: "guest", gps: "off", autoShutdownMv: "3000" });
-  // A board without GPS refuses it, so nothing but the reboot may come after it.
   assert.deepEqual(all.slice(-2), ["gps off", "reboot"]);
   assert.ok(all.includes("set guest.password guest"));
   assert.ok(all.includes("gps off"));
@@ -189,4 +188,58 @@ test("every command with a password has a stand-in without it", () => {
   assert.equal(shown.some((c) => /s3cret|gu3st|r00m/.test(c)), false);
   assert.deepEqual(cmds.map(L.maskedCommand).filter(Boolean), ["password ••••", "set guest.password ••••", "set z.room.password ••••"]);
   assert.equal(L.maskedCommand("set name password x"), "");
+});
+
+test("no TX power is sent unless one was chosen, so the board keeps its own", () => {
+  const cmds = L.buildConfigCommands({ ...cfg, role: "repeater", txPower: "" });
+  assert.ok(!cmds.some((c) => c.startsWith("set tx")));
+});
+
+test("the role is read from the reply to get role", () => {
+  assert.equal(L.nodeRole("> repeater"), "repeater");
+  assert.equal(L.nodeRole("> room_server"), "room_server");
+  assert.equal(L.nodeRole("Unknown command"), "");
+});
+
+test("the admin password is accepted only when the node echoes it whole", () => {
+  assert.equal(L.refusalReason("password abc", "password now: abc"), "");
+  assert.match(L.refusalReason("password abcdefghijklmnop", "password now: abcdefghijklmno"), /15 bytes/);
+  assert.match(L.refusalReason("password abc", "OK"), /no confirmó/);
+  assert.equal(L.refusalReason("set name x", "OK"), "");
+  assert.match(L.refusalReason("set name x", "Error: bad"), /Error: bad/);
+});
+
+test("the DFU stages follow one another without going back", () => {
+  const marks = ["start", "erase", "init", "write", "activate"].flatMap((s) => [L.dfuProgress(s, 0), L.dfuProgress(s, 1)]);
+  assert.deepEqual(marks, [...marks].sort((a, b) => a - b));
+  assert.deepEqual([marks[0], marks.at(-1)], [0, 1]);
+});
+
+test("the ping bot is turned on only in the roles that answer", () => {
+  const bots = (role) => L.buildConfigCommands({ ...cfg, role, pingBot: true }).filter((c) => c.includes(".ping."));
+  assert.equal(bots("companion").length, 2);
+  assert.deepEqual(bots("room_server"), []);
+});
+
+test("a companion that is to relay Meshtastic is set to client; no other node changes role", () => {
+  const roles = (role, mtRelay) => L.buildConfigCommands({ ...cfg, role, mtRelay }).filter((c) => c.startsWith("set z.mt.role"));
+  assert.deepEqual(roles("companion", "essential"), ["set z.mt.role client"]);
+  assert.deepEqual(roles("companion", "all"), ["set z.mt.role client"]);
+  assert.deepEqual(roles("companion", "off"), []);
+  assert.deepEqual(roles("repeater", "all"), []);
+});
+
+test("only a missing GPS lets the rest of the settings go on", () => {
+  assert.match(L.skippedSetting("gps on", "gps toggle not found"), /GPS/);
+  assert.equal(L.skippedSetting("set name x", "gps toggle not found"), "");
+  assert.equal(L.skippedSetting("gps on", "Error: bad"), "");
+});
+
+test("controls are disabled while a task runs and left as they were, even when it fails", async () => {
+  const controls = [{ disabled: false }, null, { disabled: true }];
+  await assert.rejects(L.withDisabled(controls, async () => {
+    assert.deepEqual([controls[0].disabled, controls[2].disabled], [true, true]);
+    throw new Error("boom");
+  }), /boom/);
+  assert.deepEqual([controls[0].disabled, controls[2].disabled], [false, true]);
 });

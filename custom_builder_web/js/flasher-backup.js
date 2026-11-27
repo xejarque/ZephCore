@@ -16,6 +16,9 @@ function initFlasherBackup() {
   // A reply may wait for a flash write.
   const REPLY_TIMEOUT_MS = 5000;
 
+  // Flashing and sending settings use the same serial port as a backup.
+  const FLASH_CONTROLS = ["btnUnifiedFlash", "btnInjectOnly", "btnNextStep", "flasherBoardSelect", "flasherRoleSelect"];
+
   let loaded = null;
   let busy = false;
 
@@ -63,7 +66,8 @@ function initFlasherBackup() {
     if (busy) return;
     busy = true;
     try {
-      await task();
+      const controls = FLASH_CONTROLS.map((id) => document.getElementById(id));
+      await window.ZephtacoreLogic.withDisabled(controls, task);
     } finally {
       busy = false;
     }
